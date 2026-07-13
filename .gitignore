@@ -1,0 +1,41 @@
+# ── Python ──────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ── 가상환경 ─────────────────────────────
+.venv/
+venv/
+env/
+
+# ── 환경변수 (비밀값) ─────────────────────
+# .env 는 커밋하지 않고 .env.example 만 공유
+.env
+*.env
+!.env.example
+
+# ── Airflow ─────────────────────────────
+logs/
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+standalone_admin_password.txt
+
+# ── IDE ─────────────────────────────────
+.idea/
+.vscode/
+
+# ── OS ──────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── 테스트/커버리지 ───────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
