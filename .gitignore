@@ -25,6 +25,9 @@ airflow.cfg
 airflow-webserver.pid
 standalone_admin_password.txt
 
+# ── ETL 원천 스냅샷 ───────────────────────────────────────
+data/
+
 # ── IDE ─────────────────────────────────
 .idea/
 .vscode/
