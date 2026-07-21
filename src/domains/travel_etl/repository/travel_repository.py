@@ -323,18 +323,18 @@ class TravelRepository:
         with self._conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO etl_run (run_id, dag_id) VALUES (%s, %s)
-                   ON CONFLICT (run_id) DO UPDATE
+                   ON CONFLICT (dag_id, run_id) DO UPDATE
                    SET status = 'running', started_at = now(), finished_at = NULL""",
                 (run_id, dag_id),
             )
 
-    def finish_run(self, run_id: str, status: str, stats: dict) -> None:
+    def finish_run(self, run_id: str, dag_id: str, status: str, stats: dict) -> None:
         with self._conn.cursor() as cur:
             cur.execute(
                 """UPDATE etl_run
                    SET status = %s, finished_at = now(), stats = %s::jsonb
-                   WHERE run_id = %s""",
-                (status, json.dumps(stats, ensure_ascii=False), run_id),
+                   WHERE dag_id = %s AND run_id = %s""",
+                (status, json.dumps(stats, ensure_ascii=False), dag_id, run_id),
             )
 
     # ── 공통 ───────────────────────────────────────────────

@@ -77,4 +77,6 @@ def finalize(**context) -> dict:
     status = "failed" if failed else "success"
     if failed:
         stats["failed_tasks"] = failed
-    return TravelEtlController().finalize_run(context["run_id"], status, stats)
+    return TravelEtlController().finalize_run(
+        context["run_id"], context["dag"].dag_id, status, stats
+    )

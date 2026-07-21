@@ -180,9 +180,9 @@ class TravelEtlService:
             repo.start_run(run_id, dag_id)
         return {"run_id": run_id}
 
-    def finalize_run(self, run_id: str, status: str, stats: dict) -> dict:
+    def finalize_run(self, run_id: str, dag_id: str, status: str, stats: dict) -> dict:
         with self._connections.open() as repo:
-            repo.finish_run(run_id, status, stats)
+            repo.finish_run(run_id, dag_id, status, stats)
         return stats
 
     # ── 내부 단계 ─────────────────────────────────────────

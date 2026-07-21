@@ -49,5 +49,5 @@ class TravelEtlController:
     def notify_spring(self, run_id: str) -> dict:
         return self._service.notify_spring(run_id)
 
-    def finalize_run(self, run_id: str, status: str, stats: dict) -> dict:
-        return self._service.finalize_run(run_id, status, stats)
+    def finalize_run(self, run_id: str, dag_id: str, status: str, stats: dict) -> dict:
+        return self._service.finalize_run(run_id, dag_id, status, stats)
