@@ -42,7 +42,7 @@ Airflow 기반 **ETL 오케스트레이션 서버**입니다. 여러 ETL 파이�
 flowchart LR
     S[Airflow Scheduler] --> D[travel_daily_incremental]
 
-    subgraph Python ETL — 수집·적재
+    subgraph python_etl ["Python ETL — 수집·적재"]
         D --> B[코드 부트스트랩]
         B --> A[areaBasedList2 스냅샷·정규화]
         A --> C[(업무 DB)]
@@ -50,7 +50,7 @@ flowchart LR
         DT --> C
     end
 
-    subgraph Spring — AI 처리
+    subgraph spring_ai ["Spring — AI 처리"]
         D -->|embed_pending content_id 통지| SP[Spring DATA_EXTRACT]
         SP -->|Spring AI 키워드·임베딩| C
     end
