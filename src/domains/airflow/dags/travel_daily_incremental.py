@@ -1,6 +1,6 @@
 """여행지 데이터 일일 증분 ETL DAG.
 
-매일 03:00 KST 에 공공데이터포털의 강원도 전체 여행 콘텐츠를 수집해
+매일 00:05 KST 에 공공데이터포털의 강원도 전체 여행 콘텐츠를 수집해
 목록 원천을 CSV로 보존한 뒤 변경분(content_hash 기준)만 업무 DB 에 UPSERT 하고
 상세 API·이미지·임베딩을 보강한다.
 신규 변경분이 없어도 이전 실행에서 남은 pending 작업은 계속 처리한다.
@@ -29,7 +29,7 @@ default_args = {
 with DAG(
     dag_id="travel_daily_incremental",
     description="여행지 공공데이터 일일 증분 수집·적재",
-    schedule="0 3 * * *",
+    schedule="5 0 * * *",
     start_date=pendulum.datetime(2026, 7, 1, tz=KST),
     catchup=False,
     max_active_runs=1,
