@@ -152,7 +152,9 @@ class TrendAggregationService:
         stats = CollectionStats()
         cities_data: dict[str, dict] = {}
 
-        with self._kakao_session(0.0) as client:  # 검색 단계는 수동으로 도시 간 간격 조절
+        # 블로그·카페 검색도 카카오 API 호출이므로 로컬 검색과 같은 limiter를
+        # 공유한다. 0.2초 간격이면 초당 최대 5회만 전송된다.
+        with self._kakao_session(self._settings.keyword_sleep_sec) as client:
             for city in GANGWON_CITIES:
                 blog_texts, cafe_texts = self._search_city(client, city, stats)
                 cities_data[city.name] = {"blog": blog_texts, "cafe": cafe_texts}
@@ -265,11 +267,22 @@ class TrendAggregationService:
         top = scored[: self._settings.top_n]
 
         if not top:
+            logger.info("[%s] NNP 후보 없음 — 카카오 장소 검증 건너뜀", city_name)
             return []
 
         max_score = top[0].raw_score
         for kw in top:
             kw.normalized_score = kw.raw_score / max_score if max_score > 0 else 0.0
+        logger.info(
+            "[%s] NNP 후보 %d건 중 상위 %d건 선정: %s",
+            city_name,
+            len(scored),
+            len(top),
+            ", ".join(
+                f"{kw.keyword}(blog={kw.blog_frequency}, cafe={kw.cafe_frequency}, score={kw.normalized_score:.2f})"
+                for kw in top
+            ),
+        )
         return top
 
     # ── 태스크 3: 카카오 로컬 검증 → kakao_spot 승격 ────────
@@ -304,6 +317,7 @@ class TrendAggregationService:
 
         for kw_data in keywords_data:
             keyword = kw_data["keyword"]
+            logger.info("[%s] 카카오 장소 검증 요청: keyword=%s", city.name, keyword)
             place = client.search_local(
                 keyword=keyword,
                 x=city.longitude,
@@ -313,7 +327,17 @@ class TrendAggregationService:
             stats.validated += 1
             if place is None:
                 stats.rejected += 1
+                logger.info("[%s] 카카오 장소 검증 탈락: keyword=%s", city.name, keyword)
                 continue
+
+            logger.info(
+                "[%s] 카카오 장소 검증 통과: keyword=%s, place=%s, place_id=%s, category=%s",
+                city.name,
+                keyword,
+                place.place_name,
+                place.kakao_place_id,
+                place.category_group_code,
+            )
 
             blog_f = kw_data["blog_frequency"]
             cafe_f = kw_data["cafe_frequency"]

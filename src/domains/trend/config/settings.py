@@ -42,7 +42,7 @@ class TrendSettings:
     search_radius_meters: int
     channel_diversity_bonus: float
     city_sleep_sec: float      # 도시 간 슬립 (500ms)
-    keyword_sleep_sec: float   # 카카오 로컬 API 키워드 간 슬립 (200ms)
+    keyword_sleep_sec: float   # 모든 카카오 API 호출 간 최소 간격 (기본 200ms = 초당 최대 5회)
 
     # HTTP 클라이언트
     request_timeout_sec: float

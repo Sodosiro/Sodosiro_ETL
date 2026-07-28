@@ -218,7 +218,7 @@ CREATE TABLE kakao_spot (
 | `TREND_SEARCH_RADIUS` | 카카오 로컬 검색 반경 (m) | `30000` |
 | `TREND_CHANNEL_DIVERSITY_BONUS` | 블로그+카페 동시 언급 가중치 | `1.3` |
 | `TREND_CITY_SLEEP_SEC` | 도시 간 슬립 (초) | `0.5` |
-| `TREND_KEYWORD_SLEEP_SEC` | 카카오 로컬 API 키워드 간 슬립 (초) | `0.2` |
+| `TREND_KEYWORD_SLEEP_SEC` | 모든 카카오 API 호출 간 최소 간격 (초, `0.2` = 초당 최대 5회) | `0.2` |
 | `TREND_DECAY_THRESHOLD` | 이 값 미만이면 레코드 삭제 | `0.01` |
 | `TREND_DECAY_ATTRACTION` | AT4·AD5 감쇠 계수 | `0.85` |
 | `TREND_DECAY_RESTAURANT` | FD6 감쇠 계수 | `0.70` |
