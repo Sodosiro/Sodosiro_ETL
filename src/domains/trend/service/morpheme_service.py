@@ -12,7 +12,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from src.domains.trend.constants.gangwon_cities import GANGWON_REGION_NAMES
+from src.domains.trend.constants.korea_regions import KOREA_REGION_NAMES
 from src.domains.trend.constants.travel_stopwords import TRAVEL_STOPWORDS
 
 if TYPE_CHECKING:
@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_TARGET_TAGS = {"NNP", "NNG"}
+# 일반명사(NNG)는 "오늘", "가족"처럼 문맥 일반어가 다수 섞여 관광지 후보의
+# 정밀도를 크게 떨어뜨린다. 테스트 수집에서는 고유명사(NNP)만 후보로 쓴다.
+_TARGET_TAGS = {"NNP"}
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _HTML_ENTITY_RE = re.compile(r"&[a-zA-Z]+;|&#\d+;")
 _NON_KOREAN_RE = re.compile(r"[^가-힣 ]")
@@ -49,7 +51,7 @@ class MorphemeService:
     """텍스트 목록 → 명사 빈도 맵."""
 
     def extract_frequencies(self, texts: list[str]) -> dict[str, int]:
-        """NNP·NNG 명사를 추출하고 빈도를 반환한다.
+        """NNP(고유명사)를 추출하고 빈도를 반환한다.
 
         반환: {명사: 빈도} — 불용어·지역명·2글자 미만 제거 후.
         """
@@ -72,7 +74,7 @@ class MorphemeService:
                     continue
                 if word in TRAVEL_STOPWORDS:
                     continue
-                if word in GANGWON_REGION_NAMES:
+                if word in KOREA_REGION_NAMES:
                     continue
                 freq[word] = freq.get(word, 0) + 1
         return freq
