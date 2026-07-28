@@ -65,8 +65,7 @@ class TravelEtlSettings:
     request_timeout_sec: float
     max_retries: int
     spring_base_url: str        # 적재 완료 후 변경분을 통지할 Spring 서버
-    spring_api_username: str    # 비우면 인증 없이 호출
-    spring_api_password: str
+    spring_internal_etl_token: str  # Spring 내부 ETL API 공유 서비스 토큰
     spring_notify_limit: int    # 한 실행에서 Spring AI에 통지할 최대 건수
     spring_notify_batch: int
     spring_timeout_sec: float
@@ -89,8 +88,7 @@ class TravelEtlSettings:
             request_timeout_sec=float(_env("API_TIMEOUT_SEC", "15")),
             max_retries=int(_env("API_MAX_RETRIES", "3")),
             spring_base_url=_env("SPRING_BASE_URL"),
-            spring_api_username=_env("SPRING_API_USERNAME"),
-            spring_api_password=_env("SPRING_API_PASSWORD"),
+            spring_internal_etl_token=_env("SPRING_INTERNAL_ETL_TOKEN"),
             # 테스트 중 의도치 않은 대량 임베딩 비용을 막기 위한 안전한 기본값.
             spring_notify_limit=int(_env("SPRING_NOTIFY_LIMIT", "10")),
             spring_notify_batch=int(_env("SPRING_NOTIFY_BATCH", "500")),

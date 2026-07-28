@@ -128,36 +128,30 @@ class TravelRepository:
             """INSERT INTO tourist_spot (
                    content_id, content_type_id, title, addr1, addr2, zipcode, map_x, map_y, map_level,
                    ldong_regn_code, ldong_signgu_code,
-                   area_code, sigungu_code, cat1, cat2, cat3,
-                   lcls_systm1, lcls_systm2, lcls_systm3, first_image,
+                   sigungu_code, category, first_image,
                    created_time, collected_at
                ) VALUES %s
                ON CONFLICT (content_id) DO UPDATE SET
                    content_type_id = EXCLUDED.content_type_id,
                    title = EXCLUDED.title, addr1 = EXCLUDED.addr1, addr2 = EXCLUDED.addr2,
                    zipcode = EXCLUDED.zipcode, map_x = EXCLUDED.map_x, map_y = EXCLUDED.map_y,
-                   map_level = EXCLUDED.map_level, area_code = EXCLUDED.area_code,
+                   map_level = EXCLUDED.map_level,
                    ldong_regn_code = EXCLUDED.ldong_regn_code,
                    ldong_signgu_code = EXCLUDED.ldong_signgu_code,
-                   sigungu_code = EXCLUDED.sigungu_code, cat1 = EXCLUDED.cat1,
-                   cat2 = EXCLUDED.cat2, cat3 = EXCLUDED.cat3,
-                   lcls_systm1 = EXCLUDED.lcls_systm1,
-                   lcls_systm2 = EXCLUDED.lcls_systm2,
-                   lcls_systm3 = EXCLUDED.lcls_systm3,
+                   sigungu_code = EXCLUDED.sigungu_code, category = EXCLUDED.category,
                    first_image = EXCLUDED.first_image, created_time = EXCLUDED.created_time,
                    collected_at = EXCLUDED.collected_at""",
             [
                 (
                     r.content_id, r.content_type_id, r.title, r.addr1, r.addr2, r.zipcode, r.map_x, r.map_y,
                     r.map_level, r.ldong_regn_code, r.ldong_signgu_code,
-                    r.area_code, r.sigungu_code, r.cat1, r.cat2, r.cat3,
-                    r.lcls_systm1, r.lcls_systm2, r.lcls_systm3,
+                    r.sigungu_code, r.category,
                     r.first_image, r.created_time,
                 )
                 for r in rows
             ],
             template=(
-                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
             ),
         )
 
@@ -282,10 +276,10 @@ class TravelRepository:
         with self._conn.cursor() as cur:
             cur.execute("DELETE FROM spot_image WHERE content_id = %s", (content_id,))
         return self._upsert(
-            """INSERT INTO spot_image (content_id, "order", type, image_url) VALUES %s
+            """INSERT INTO spot_image (content_id, "order", image_url) VALUES %s
                ON CONFLICT (content_id, "order") DO UPDATE
-               SET type = EXCLUDED.type, image_url = EXCLUDED.image_url""",
-            [(r.content_id, r.order, r.type, r.image_url) for r in rows],
+               SET image_url = EXCLUDED.image_url""",
+            [(r.content_id, r.order, r.image_url) for r in rows],
         )
 
     def update_first_image_if_missing(self, content_id: int, image_url: str) -> None:

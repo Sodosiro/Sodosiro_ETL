@@ -60,7 +60,7 @@ class SpringClient:
         response = self._session.post(
             url,
             json=payload,
-            auth=self._auth(),
+            headers={"X-Internal-ETL-Token": self._settings.spring_internal_etl_token},
             timeout=self._settings.spring_timeout_sec,
         )
         if response.status_code >= 500:
@@ -69,11 +69,6 @@ class SpringClient:
             raise SpringNotifyError(f"HTTP {response.status_code}: {response.text[:200]}")
         body = response.json() if response.content else {}
         return int(body.get("accepted", len(payload["contentIds"])))
-
-    def _auth(self) -> tuple[str, str] | None:
-        username = self._settings.spring_api_username
-        return (username, self._settings.spring_api_password) if username else None
-
 
 class _RetryableStatus(RuntimeError):
     """5xx — 재시도 대상."""
