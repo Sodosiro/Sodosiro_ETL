@@ -124,7 +124,7 @@ docker compose up -d airflow-webserver airflow-scheduler    # webserver + schedu
 ```
 
 - 웹 UI: http://localhost:8080 (기본 로그인 `airflow` / `airflow`, `.env`에서 변경)
-- DB 연결은 `docker/.env`의 `AIRFLOW_DB_URL`로 설정합니다 (호스트 PostgreSQL은 `host.docker.internal` 사용).
+- DB 연결은 `docker/.env`의 `AIRFLOW_DB_URL`로 설정합니다. Backend Compose의 공용 Docker 네트워크에서 `postgres:5432`를 사용합니다 (호스트 공개 포트 `5434`는 컨테이너 간 통신에 사용하지 않습니다).
 - `airflow-init`의 `airflow db migrate`는 **Airflow 메타데이터 DB**를 마이그레이션합니다. 여행지 **업무 DB**는 별도이며 아래에서 스키마를 적용합니다.
 
 ### 업무 DB 스키마

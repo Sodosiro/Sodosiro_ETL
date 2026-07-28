@@ -34,8 +34,7 @@ x-airflow-common: &airflow-common
     TRAVEL_CONTENT_TYPE_ID: ${TRAVEL_CONTENT_TYPE_ID:-}
     # 적재 완료 후 변경분 통지 대상 Spring 서버 (AI 처리는 Spring 책임)
     SPRING_BASE_URL: ${SPRING_BASE_URL:-http://host.docker.internal:8081}
-    SPRING_API_USERNAME: ${SPRING_API_USERNAME:-}
-    SPRING_API_PASSWORD: ${SPRING_API_PASSWORD:-}
+    SPRING_INTERNAL_ETL_TOKEN: ${SPRING_INTERNAL_ETL_TOKEN:-}
     # 테스트 안전장치: 한 DAG 실행에서 Spring AI에 통지할 최대 건수
     SPRING_NOTIFY_LIMIT: ${SPRING_NOTIFY_LIMIT:-10}
 
@@ -128,3 +127,9 @@ services:
 
 volumes:
   airflow-logs:
+
+# Backend Compose가 만든 공용 네트워크. 여기서 postgres/redis 서비스명을 해석한다.
+networks:
+  default:
+    name: docker_default
+    external: true
