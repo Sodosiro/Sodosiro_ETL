@@ -88,6 +88,6 @@ with DAG(
         >> enrich_detail_intro
         >> collect_detail_info
         >> collect_images
-        >> notify_spring
+        # >> notify_spring
         >> finalize
     )
