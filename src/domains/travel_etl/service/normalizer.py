@@ -25,6 +25,7 @@ from src.domains.travel_etl.controller.dto.models import (
     SpotImageRow,
     TouristSpotRow,
 )
+from src.domains.travel_etl.constants.tourist_category import classify_tourist_category
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ T = TypeVar("T")
 # 대한민국 좌표 유효 범위 (벗어나면 좌표만 버린다)
 _LON_RANGE = (Decimal("124"), Decimal("132"))
 _LAT_RANGE = (Decimal("33"), Decimal("39"))
-_CONTENT_HASH_VERSION = "v2-lcls-columns"
+_CONTENT_HASH_VERSION = "v4-drop-legacy-area-code"
 
 
 def _text(item: dict, key: str) -> str | None:
@@ -81,8 +82,8 @@ def compute_content_hash(item: dict) -> str:
     """목록 응답의 검색 대상 필드로 변경 감지 해시를 만든다 (modifiedtime 포함)."""
     keys = (
         "contentid", "contenttypeid", "title", "addr1", "addr2", "zipcode", "mapx", "mapy",
-        "mlevel", "lDongRegnCd", "lDongSignguCd", "areacode", "sigungucode",
-        "lclsSystm1", "lclsSystm2", "lclsSystm3", "cat1", "cat2", "cat3",
+        "mlevel", "lDongRegnCd", "lDongSignguCd", "sigungucode",
+        "lclsSystm1", "lclsSystm2", "lclsSystm3",
         "firstimage", "modifiedtime",
     )
     # 정규화/스키마 의미가 바뀌면 버전을 올려 기존 행을 한 번 안전하게 재적재한다.
@@ -143,6 +144,17 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
         if content_id is None or title is None:
             logger.warning("필수값 누락으로 격리: contentid=%s", item.get("contentid"))
             return None
+        lcls_systm1 = _text(item, "lclsSystm1")
+        lcls_systm2 = _text(item, "lclsSystm2")
+        category = classify_tourist_category(lcls_systm1, lcls_systm2)
+        if category is None:
+            logger.warning(
+                "지원하지 않는 TourAPI 분류로 격리: contentid=%s, lclsSystm1=%s, lclsSystm2=%s",
+                content_id,
+                lcls_systm1,
+                lcls_systm2,
+            )
+            return None
         return TouristSpotRow(
             content_id=content_id,
             content_type_id=_text(item, "contenttypeid"),
@@ -155,14 +167,8 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
             map_level=_int(item, "mlevel"),
             ldong_regn_code=_text(item, "lDongRegnCd"),
             ldong_signgu_code=_text(item, "lDongSignguCd"),
-            area_code=_text(item, "areacode"),
             sigungu_code=_text(item, "sigungucode"),
-            cat1=_text(item, "cat1"),
-            cat2=_text(item, "cat2"),
-            cat3=_text(item, "cat3"),
-            lcls_systm1=_text(item, "lclsSystm1"),
-            lcls_systm2=_text(item, "lclsSystm2"),
-            lcls_systm3=_text(item, "lclsSystm3"),
+            category=int(category),
             first_image=_text(item, "firstimage"),
             created_time=_datetime14(item, "createdtime"),
             content_hash=compute_content_hash(item),
@@ -184,7 +190,6 @@ class SpotImageNormalizer(Normalizer[SpotImageRow]):
         return SpotImageRow(
             content_id=self._content_id,
             order=self._order,
-            type=_text(item, "imgname"),
             image_url=url,
         )
 

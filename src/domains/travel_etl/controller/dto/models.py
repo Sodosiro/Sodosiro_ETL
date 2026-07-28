@@ -55,14 +55,8 @@ class TouristSpotRow:
     map_level: int | None
     ldong_regn_code: str | None
     ldong_signgu_code: str | None
-    area_code: str | None
     sigungu_code: str | None
-    cat1: str | None
-    cat2: str | None
-    cat3: str | None
-    lcls_systm1: str | None
-    lcls_systm2: str | None
-    lcls_systm3: str | None
+    category: int
     first_image: str | None
     created_time: datetime | None
     content_hash: str
@@ -74,7 +68,6 @@ class SpotImageRow:
 
     content_id: int
     order: int
-    type: str | None
     image_url: str | None
 
 

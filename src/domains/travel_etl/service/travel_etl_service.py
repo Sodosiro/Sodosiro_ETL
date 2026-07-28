@@ -108,13 +108,11 @@ class TravelEtlService:
             deduped = self._dedup_by_content_id(rows)
             stats.extra["duplicated"] = len(rows) - len(deduped)
             rows = deduped
-            category_count = self._sync_categories_if_missing(repo, client, rows)
             changed = self._filter_changed(repo, rows)
             repo.upsert_tourist_spots(changed)
             repo.upsert_spot_states(changed)
             stats.processed, stats.changed = len(rows), len(changed)
             stats.quarantined, stats.api_calls = len(quarantined), client.calls_made
-            stats.extra["categories_synced"] = category_count
             stats.extra["snapshot_path"] = snapshot_path
         logger.info("관광지 스냅샷 적재: %s", stats.as_dict())
         return stats.as_dict()
@@ -227,18 +225,6 @@ class TravelEtlService:
         items = list(client.iter_items(Endpoint.LCLS_SYSTM_CODE, num_rows=100, **params))
         rows, _ = NormalizerFactory.category(depth, parent).normalize_many(items)
         return rows
-
-    def _sync_categories_if_missing(self, repo, client, rows) -> int:
-        """수집 데이터가 쓰는 분류 코드가 없을 때만 코드표를 다시 조회한다."""
-        required = {
-            code
-            for row in rows
-            for code in (row.lcls_systm1, row.lcls_systm2, row.lcls_systm3)
-            if code
-        }
-        if required.issubset(repo.list_category_codes()):
-            return 0
-        return self._sync_categories(repo, client)
 
     def _fetch_spot_items(self, repo: TravelRepository, client: ApiClientBase) -> list[dict]:
         """법정동 코드별 전체 콘텐츠를 수집한다 (contentTypeId가 비면 전체 유형)."""
