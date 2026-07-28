@@ -43,6 +43,37 @@ class KakaoSpotRow:
     popularity_score: float
 
 
+def _merge_kakao_spot_rows(rows: list[KakaoSpotRow]) -> list[KakaoSpotRow]:
+    """같은 카카오 장소로 매칭된 키워드의 수치를 하나로 합친다.
+
+    PostgreSQL은 하나의 ``INSERT .. ON CONFLICT DO UPDATE`` 문에서 같은
+    conflict key를 두 번 갱신할 수 없다. 서로 다른 트렌드 키워드가 같은
+    ``kakao_place_id``를 반환하는 것은 정상적인 경우이므로, 저장 전에
+    언급 수와 점수를 합산해 장소당 한 행만 남긴다.
+    """
+    merged: dict[str, KakaoSpotRow] = {}
+    for row in rows:
+        existing = merged.get(row.kakao_place_id)
+        if existing is None:
+            merged[row.kakao_place_id] = row
+            continue
+
+        merged[row.kakao_place_id] = KakaoSpotRow(
+            kakao_place_id=existing.kakao_place_id,
+            place_name=existing.place_name,
+            city_name=existing.city_name,
+            address_name=existing.address_name,
+            category_group_code=existing.category_group_code,
+            category_group_name=existing.category_group_name,
+            longitude=existing.longitude,
+            latitude=existing.latitude,
+            blog_mention_count=existing.blog_mention_count + row.blog_mention_count,
+            cafe_mention_count=existing.cafe_mention_count + row.cafe_mention_count,
+            popularity_score=existing.popularity_score + row.popularity_score,
+        )
+    return list(merged.values())
+
+
 class TrendConnectionFactory:
     """DB 커넥션 생성 책임 분리."""
 
@@ -118,6 +149,13 @@ class TrendRepository:
         """
         if not rows:
             return []
+        unique_rows = _merge_kakao_spot_rows(rows)
+        if len(unique_rows) != len(rows):
+            logger.info(
+                "카카오 장소 배치 중복 병합: 입력 %d건 → 저장 %d건",
+                len(rows),
+                len(unique_rows),
+            )
         with self._conn.cursor() as cur:
             psycopg2.extras.execute_values(
                 cur,
@@ -142,7 +180,7 @@ class TrendRepository:
                         r.longitude, r.latitude,
                         r.blog_mention_count, r.cafe_mention_count, r.popularity_score,
                     )
-                    for r in rows
+                    for r in unique_rows
                 ],
                 template=(
                     "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
