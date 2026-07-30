@@ -25,6 +25,8 @@ from src.domains.trend.constants.gangwon_cities import GANGWON_CITIES, GangwonCi
 from src.domains.trend.repository.trend_repository import (
     KakaoSpotRow,
     TrendConnectionFactory,
+    TrendRepository,
+    TrendSourceDocumentRow,
     TrendingSpotRow,
 )
 from src.domains.trend.service.morpheme_service import MorphemeService
@@ -146,50 +148,135 @@ class TrendAggregationService:
         """18개 도시 × 3쿼리 × 블로그·카페 검색 → 원천 JSON 저장."""
         raw_path = self._store.raw_path(execution_date, run_id)
         if raw_path.is_file():
+            # 이전 시도가 스냅샷 저장 후 종료됐어도 URL 이력을 복구해 다음
+            # 실행에서 같은 게시글을 다시 점수화하지 않도록 한다.
+            self._record_snapshot_source_documents(self._store.read(raw_path), run_id)
             logger.info("원천 스냅샷 재사용: %s", raw_path)
             return {"raw_path": str(raw_path), "reused": True}
 
         stats = CollectionStats()
-        cities_data: dict[str, dict] = {}
+        cities_data: dict[str, dict[str, list[dict]]] = {}
 
-        # 블로그·카페 검색도 카카오 API 호출이므로 로컬 검색과 같은 limiter를
-        # 공유한다. 0.2초 간격이면 초당 최대 5회만 전송된다.
-        with self._kakao_session(self._settings.keyword_sleep_sec) as client:
+        # 검색 결과의 URL은 DB 이력과 비교한다. 같은 실행 안에서 다른 검색어에
+        # 중복 노출된 URL은 메모리에서 한 번만 보관한다.
+        with self._connections.open() as repo, self._kakao_session(
+            self._settings.keyword_sleep_sec
+        ) as client:
             for city in GANGWON_CITIES:
-                blog_texts, cafe_texts = self._search_city(client, city, stats)
-                cities_data[city.name] = {"blog": blog_texts, "cafe": cafe_texts}
+                blog_documents, cafe_documents = self._search_city(client, repo, city)
+                cities_data[city.name] = {"blog": blog_documents, "cafe": cafe_documents}
                 stats.cities_processed += 1
                 logger.info(
-                    "[%s] 블로그 %d건 / 카페 %d건",
-                    city.name, len(blog_texts), len(cafe_texts),
+                    "[%s] 신규 블로그 %d건 / 신규 카페 %d건",
+                    city.name, len(blog_documents), len(cafe_documents),
                 )
                 time.sleep(self._settings.city_sleep_sec)
 
-        stats.api_calls = sum(len(v["blog"]) + len(v["cafe"]) for v in cities_data.values())
-        stats.raw_documents = stats.api_calls
+            stats.api_calls = client.calls_made
+        stats.raw_documents = sum(
+            len(channel_documents)
+            for city_documents in cities_data.values()
+            for channel_documents in city_documents.values()
+        )
 
         payload = {
             "collected_at": datetime.now(timezone.utc).isoformat(),
             "cities": cities_data,
         }
         self._store.write(raw_path, payload)
+        self._record_snapshot_source_documents(payload, run_id)
         result = {"raw_path": str(raw_path), "reused": False, **stats.as_dict()}
         logger.info("원천 수집 완료: %s", result)
         return result
 
     def _search_city(
-        self, client: GuardedKakaoClient, city: GangwonCity, stats: CollectionStats
-    ) -> tuple[list[str], list[str]]:
-        """한 도시의 블로그·카페 텍스트 수집."""
-        blog_texts: list[str] = []
-        cafe_texts: list[str] = []
+        self, client: GuardedKakaoClient, repo: TrendRepository, city: GangwonCity
+    ) -> tuple[list[dict], list[dict]]:
+        """한 도시의 최신 블로그·카페 게시글을 중복 없이 수집한다."""
+        documents_by_channel: dict[str, dict[str, dict]] = {"blog": {}, "cafe": {}}
         for query in _SEARCH_QUERIES:
             q = f"{city.short_name} {query}"
-            for doc in client.search_blog(q):
-                blog_texts.append(f"{doc.get('title', '')} {doc.get('contents', '')}")
-            for doc in client.search_cafe(q):
-                cafe_texts.append(f"{doc.get('title', '')} {doc.get('contents', '')}")
-        return blog_texts, cafe_texts
+            for channel in ("blog", "cafe"):
+                self._collect_new_search_documents(
+                    client, repo, city, channel, q, documents_by_channel[channel]
+                )
+        return list(documents_by_channel["blog"].values()), list(documents_by_channel["cafe"].values())
+
+    def _collect_new_search_documents(
+        self,
+        client: GuardedKakaoClient,
+        repo: TrendRepository,
+        city: GangwonCity,
+        channel: str,
+        query: str,
+        documents_by_url: dict[str, dict],
+    ) -> None:
+        """최신순 페이지를 순회하다 이전 실행의 URL을 만나면 중단한다."""
+        page_size = min(50, max(1, self._settings.search_page_size))
+        max_pages = min(50, max(1, self._settings.search_max_pages))
+
+        for page in range(1, max_pages + 1):
+            documents = (
+                client.search_blog(query, page=page, size=page_size)
+                if channel == "blog"
+                else client.search_cafe(query, page=page, size=page_size)
+            )
+            if not documents:
+                return
+
+            urls = [doc.get("url", "") for doc in documents if doc.get("url")]
+            seen_before_run = repo.find_seen_source_urls(city.name, channel, urls)
+
+            for doc in documents:
+                source_url = doc.get("url", "")
+                if not source_url:
+                    logger.warning("[%s] URL 없는 %s 검색 문서 제외", city.name, channel)
+                    continue
+                # 현재 실행 중 다른 검색어에서 이미 수집한 글은 무시하되,
+                # 이 검색어의 과거 기준점은 아니므로 페이지 순회를 계속한다.
+                if source_url in documents_by_url:
+                    documents_by_url[source_url]["matched_queries"].append(query)
+                    continue
+                if source_url in seen_before_run:
+                    logger.info(
+                        "[%s] %s 최신순 수집 중 기존 URL 발견 — query=%s, page=%d에서 종료",
+                        city.name, channel, query, page,
+                    )
+                    return
+
+                documents_by_url[source_url] = {
+                    "url": source_url,
+                    "published_at": doc.get("datetime"),
+                    "title": doc.get("title", ""),
+                    "contents": doc.get("contents", ""),
+                    "matched_queries": [query],
+                }
+
+            # 마지막 페이지가 꽉 차지 않았으면 더 오래된 결과도 없다.
+            if len(documents) < page_size:
+                return
+
+    def _record_snapshot_source_documents(self, payload: dict, run_id: str) -> int:
+        """스냅샷에 보존된 신규 URL을 DB 이력에 기록해 다음 실행에서 제외한다."""
+        rows: list[TrendSourceDocumentRow] = []
+        for city_name, channels in payload.get("cities", {}).items():
+            for channel in ("blog", "cafe"):
+                for document in channels.get(channel, []):
+                    if not isinstance(document, dict) or not document.get("url"):
+                        continue
+                    rows.append(
+                        TrendSourceDocumentRow(
+                            city_name=city_name,
+                            channel=channel,
+                            source_url=document["url"],
+                            published_at=document.get("published_at"),
+                            first_run_id=run_id,
+                        )
+                    )
+        with self._connections.open() as repo:
+            saved = repo.insert_source_documents(rows)
+        logger.info("원천 문서 이력 저장: %d건", saved)
+        return saved
 
     # ── 태스크 2: 형태소 분석·집계 ─────────────────────────
 
@@ -237,8 +324,12 @@ class TrendAggregationService:
 
     def _aggregate_city(self, city_name: str, texts: dict) -> list[AggregatedKeyword]:
         """블로그·카페 채널 빈도 집계 + 채널 다양성 보너스 → 정규화된 상위 N개."""
-        blog_freq = self._morpheme.extract_frequencies(texts.get("blog", []))
-        cafe_freq = self._morpheme.extract_frequencies(texts.get("cafe", []))
+        blog_freq = self._morpheme.extract_frequencies(
+            [self._document_text(document) for document in texts.get("blog", [])]
+        )
+        cafe_freq = self._morpheme.extract_frequencies(
+            [self._document_text(document) for document in texts.get("cafe", [])]
+        )
 
         all_keywords = set(blog_freq) | set(cafe_freq)
         scored: list[AggregatedKeyword] = []
@@ -285,6 +376,13 @@ class TrendAggregationService:
         )
         return top
 
+    @staticmethod
+    def _document_text(document: str | dict) -> str:
+        """신규 스냅샷과 이전 문자열 스냅샷을 모두 분석할 수 있게 한다."""
+        if isinstance(document, str):
+            return document
+        return f"{document.get('title', '')} {document.get('contents', '')}"
+
     # ── 태스크 3: 카카오 로컬 검증 → kakao_spot 승격 ────────
 
     def validate_and_promote(self, aggregated_path: str) -> dict:
@@ -320,6 +418,8 @@ class TrendAggregationService:
             logger.info("[%s] 카카오 장소 검증 요청: keyword=%s", city.name, keyword)
             place = client.search_local(
                 keyword=keyword,
+                city_name=city.name,
+                city_short_name=city.short_name,
                 x=city.longitude,
                 y=city.latitude,
                 radius=self._settings.search_radius_meters,

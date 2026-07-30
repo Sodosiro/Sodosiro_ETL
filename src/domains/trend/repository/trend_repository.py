@@ -43,6 +43,17 @@ class KakaoSpotRow:
     popularity_score: float
 
 
+@dataclass(frozen=True)
+class TrendSourceDocumentRow:
+    """한 번만 분석해야 하는 카카오 검색 원천 문서."""
+
+    city_name: str
+    channel: str
+    source_url: str
+    published_at: str | None
+    first_run_id: str
+
+
 def _merge_kakao_spot_rows(rows: list[KakaoSpotRow]) -> list[KakaoSpotRow]:
     """같은 카카오 장소로 매칭된 키워드의 수치를 하나로 합친다.
 
@@ -104,6 +115,44 @@ class TrendRepository:
 
     def rollback(self) -> None:
         self._conn.rollback()
+
+    # ── 원천 문서 이력 ───────────────────────────────────────
+
+    def find_seen_source_urls(
+        self, city_name: str, channel: str, source_urls: list[str]
+    ) -> set[str]:
+        """이전 성공 수집에서 이미 확인한 URL 집합을 반환한다."""
+        if not source_urls:
+            return set()
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """SELECT source_url
+                   FROM trend_source_document
+                   WHERE city_name = %s
+                     AND channel = %s
+                     AND source_url = ANY(%s)""",
+                (city_name, channel, source_urls),
+            )
+            return {row[0] for row in cur.fetchall()}
+
+    def insert_source_documents(self, rows: list[TrendSourceDocumentRow]) -> int:
+        """원천 문서 URL을 멱등적으로 기록한다."""
+        if not rows:
+            return 0
+        with self._conn.cursor() as cur:
+            psycopg2.extras.execute_values(
+                cur,
+                """INSERT INTO trend_source_document
+                       (city_name, channel, source_url, published_at, first_run_id)
+                   VALUES %s
+                   ON CONFLICT (city_name, channel, source_url) DO NOTHING""",
+                [
+                    (r.city_name, r.channel, r.source_url, r.published_at, r.first_run_id)
+                    for r in rows
+                ],
+                template="(%s, %s, %s, %s::timestamptz, %s)",
+            )
+            return cur.rowcount
 
     # ── trending_spot ────────────────────────────────────────
 

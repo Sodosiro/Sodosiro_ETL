@@ -93,6 +93,6 @@ with DAG(
         >> collect_search_texts
         >> analyze_and_aggregate
         >> validate_and_promote
-        >> notify_spring_embedding
+        # >> notify_spring_embedding
         >> finalize
     )

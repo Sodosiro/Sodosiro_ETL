@@ -39,6 +39,8 @@ class TrendSettings:
     # 수집·집계 파라미터
     min_frequency: int
     top_n: int
+    search_page_size: int
+    search_max_pages: int
     search_radius_meters: int
     channel_diversity_bonus: float
     city_sleep_sec: float      # 도시 간 슬립 (500ms)
@@ -70,6 +72,8 @@ class TrendSettings:
             ),
             min_frequency=int(_env("TREND_MIN_FREQUENCY", "3")),
             top_n=int(_env("TREND_TOP_N", "20")),
+            search_page_size=int(_env("TREND_SEARCH_PAGE_SIZE", "50")),
+            search_max_pages=int(_env("TREND_SEARCH_MAX_PAGES", "2")),
             search_radius_meters=int(_env("TREND_SEARCH_RADIUS", "30000")),
             channel_diversity_bonus=float(_env("TREND_CHANNEL_DIVERSITY_BONUS", "1.3")),
             city_sleep_sec=float(_env("TREND_CITY_SLEEP_SEC", "0.5")),

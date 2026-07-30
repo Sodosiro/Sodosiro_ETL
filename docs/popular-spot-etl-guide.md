@@ -27,11 +27,12 @@
 ```
 [popular_spot_collection — 매 정각 KST]
 
-Kakao Daum 검색 API
-  (블로그·카페 × 3쿼리 × 18도시)
+Kakao Daum 검색 API (최신순)
+  (블로그·카페 × 3쿼리 × 18도시, 채널·쿼리당 최대 2페이지)
         │
-        ▼ 원천 JSON 스냅샷 저장
+        ▼ 신규 URL만 원천 JSON 스냅샷 저장
         │  data/trend/raw/{date}/raw_{run_id}.json
+        │ 이전 실행에서 수집한 URL을 만나면 해당 검색어·채널 중단
         ▼
 kiwipiepy 형태소 분석 (NNP·NNG)
   + 불용어·지역명 exact match 제거
@@ -101,7 +102,7 @@ sodosiro-ETL/
 | 태스크 | 역할 | 입력 | 출력 (XCom) |
 |--------|------|------|-------------|
 | `start_run` | etl_run 레코드 생성 | - | `{run_id}` |
-| `collect_search_texts` | Kakao 검색 API 108 req | run_id, logical_date | `{raw_path, api_calls, ...}` |
+| `collect_search_texts` | Kakao 최신순 검색 API 기본 최대 216 req | run_id, logical_date | `{raw_path, api_calls, ...}` |
 | `analyze_and_aggregate` | 형태소 분석 + trending_spot 저장 | raw_path (XCom) | `{aggregated_path, total_keywords, ...}` |
 | `validate_and_promote` | 카카오 로컬 API ≤360 req + kakao_spot upsert | aggregated_path (XCom) | `{promoted, new_spot_ids, api_calls, ...}` |
 | `notify_spring_embedding` | 신규 장소 Spring 통지 | new_spot_ids (XCom) | `{notified, accepted}` |
