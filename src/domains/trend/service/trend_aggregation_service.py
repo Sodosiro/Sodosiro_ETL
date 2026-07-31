@@ -20,10 +20,12 @@ import requests
 
 from src.core.rate_limiter import MinIntervalLimiter
 from src.domains.trend.client.kakao_client import GuardedKakaoClient, KakaoClient, KakaoPlace
+from src.domains.trend.client.tistory_image_client import TistoryImageClient
 from src.domains.trend.config.settings import TrendSettings, get_trend_settings
 from src.domains.trend.constants.gangwon_cities import GANGWON_CITIES, GangwonCity
 from src.domains.trend.repository.trend_repository import (
     KakaoSpotRow,
+    KakaoSpotImageRow,
     TrendConnectionFactory,
     TrendRepository,
     TrendSourceDocumentRow,
@@ -95,6 +97,19 @@ class PromotionStats:
             "api_calls": self.api_calls,
             "new_spot_ids": self.new_spot_ids,
         }
+
+
+@dataclass
+class ImageCollectionStats:
+    targets: int = 0
+    tourist_spot_images: int = 0
+    tistory_images: int = 0
+    tistory_candidates: int = 0
+    skipped: int = 0
+    kakao_api_calls: int = 0
+
+    def as_dict(self) -> dict:
+        return asdict(self)
 
 
 # ── 스냅샷 저장소 ───────────────────────────────────────────
@@ -462,6 +477,7 @@ class TrendAggregationService:
                     blog_mention_count=blog_f,
                     cafe_mention_count=cafe_f,
                     popularity_score=norm_score,
+                    phone=place.phone,
                 )
             )
 
@@ -494,6 +510,84 @@ class TrendAggregationService:
         }
         logger.info("감쇠 완료: %s", result)
         return result
+
+    # ── 인기 장소 대표 이미지 보강 ───────────────────────────
+
+    def collect_spot_images(self) -> dict:
+        """TourAPI 이미지를 우선 연결하고, 없을 때만 허용된 티스토리 원문을 확인한다."""
+        with self._connections.open() as repo:
+            targets = repo.find_kakao_spots_missing_image(self._settings.image_batch_limit)
+
+        stats = ImageCollectionStats(targets=len(targets))
+        tistory = TistoryImageClient(
+            min_interval_sec=self._settings.tistory_min_interval_sec,
+            timeout=self._settings.request_timeout_sec,
+        )
+        with self._kakao_session(self._settings.keyword_sleep_sec) as kakao:
+            for target in targets:
+                with self._connections.open() as repo:
+                    tourist_image = repo.find_existing_tourist_image(target.place_name, target.city_name)
+                if tourist_image is not None:
+                    content_id, image_url = tourist_image
+                    self._save_spot_image(
+                        KakaoSpotImageRow(
+                            kakao_spot_id=target.id,
+                            tourist_content_id=content_id,
+                            image_url=image_url,
+                            source_doc_url=None,
+                            source_site_name="TourAPI",
+                            source_type="TOURIST_SPOT",
+                        )
+                    )
+                    stats.tourist_spot_images += 1
+                    continue
+
+                image_row = self._find_tistory_image(
+                    kakao, tistory, target.id, target.place_name, target.city_name, stats
+                )
+                if image_row is None:
+                    stats.skipped += 1
+                    continue
+                self._save_spot_image(image_row)
+                stats.tistory_images += 1
+
+            stats.kakao_api_calls = kakao.calls_made
+
+        result = stats.as_dict()
+        logger.info("인기 장소 이미지 보강 완료: %s", result)
+        return result
+
+    def _find_tistory_image(
+        self,
+        kakao: GuardedKakaoClient,
+        tistory: TistoryImageClient,
+        kakao_spot_id: int,
+        place_name: str,
+        city_name: str,
+        stats: ImageCollectionStats,
+    ) -> KakaoSpotImageRow | None:
+        query = f"{city_name} {place_name}"
+        for document in kakao.search_image(query, size=10):
+            site_name = str(document.get("display_sitename", "")).strip()
+            source_url = str(document.get("doc_url", "")).strip()
+            if site_name.lower() not in {"tistory", "티스토리"} or not source_url:
+                continue
+            stats.tistory_candidates += 1
+            image_url = tistory.extract_image(source_url, query)
+            if image_url:
+                return KakaoSpotImageRow(
+                    kakao_spot_id=kakao_spot_id,
+                    tourist_content_id=None,
+                    image_url=image_url,
+                    source_doc_url=source_url,
+                    source_site_name="티스토리",
+                    source_type="TISTORY",
+                )
+        return None
+
+    def _save_spot_image(self, row: KakaoSpotImageRow) -> None:
+        with self._connections.open() as repo:
+            repo.upsert_kakao_spot_image(row)
 
     # ── Spring 통지 ─────────────────────────────────────────
 

@@ -56,6 +56,10 @@ class TrendSettings:
     decay_restaurant: float   # FD6
     decay_cafe: float         # CE7
 
+    # 인기 장소 이미지 보강 파라미터
+    image_batch_limit: int
+    tistory_min_interval_sec: float
+
     # Spring 통지
     spring_base_url: str
     spring_internal_etl_token: str
@@ -84,6 +88,8 @@ class TrendSettings:
             decay_attraction=float(_env("TREND_DECAY_ATTRACTION", "0.85")),
             decay_restaurant=float(_env("TREND_DECAY_RESTAURANT", "0.70")),
             decay_cafe=float(_env("TREND_DECAY_CAFE", "0.70")),
+            image_batch_limit=int(_env("TREND_IMAGE_BATCH_LIMIT", "50")),
+            tistory_min_interval_sec=float(_env("TREND_TISTORY_MIN_INTERVAL_SEC", "3")),
             spring_base_url=_env("SPRING_BASE_URL"),
             spring_internal_etl_token=_env("SPRING_INTERNAL_ETL_TOKEN"),
             spring_timeout_sec=float(_env("SPRING_TIMEOUT_SEC", "10")),

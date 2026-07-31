@@ -76,6 +76,15 @@ with DAG(
         ),
     )
 
+    collect_spot_images = PythonOperator(
+        task_id="collect_spot_images",
+        python_callable=tasks.collect_spot_images,
+        doc_md=(
+            "동일 이름·도시의 tourist_spot 대표/상세 이미지 URL을 먼저 연결합니다.\n"
+            "없을 때만 카카오 이미지 검색 결과 중 robots.txt 접근이 허용된 티스토리 원문을 저속 조회해 이미지 링크와 출처를 저장합니다."
+        ),
+    )
+
     notify_spring_embedding = PythonOperator(
         task_id="notify_spring_embedding",
         python_callable=tasks.notify_spring_embedding,
@@ -93,6 +102,7 @@ with DAG(
         >> collect_search_texts
         >> analyze_and_aggregate
         >> validate_and_promote
+        >> collect_spot_images
         # >> notify_spring_embedding
         >> finalize
     )

@@ -34,5 +34,8 @@ class TrendController:
     def apply_decay_and_prune(self) -> dict:
         return self._service.apply_decay_and_prune()
 
+    def collect_spot_images(self) -> dict:
+        return self._service.collect_spot_images()
+
     def finalize_run(self, run_id: str, dag_id: str, status: str, stats: dict) -> dict:
         return self._service.finalize_run(run_id, dag_id, status, stats)

@@ -10,6 +10,7 @@ _COLLECTION_TASK_IDS = (
     "collect_search_texts",
     "analyze_and_aggregate",
     "validate_and_promote",
+    "collect_spot_images",
     "notify_spring_embedding",
 )
 
@@ -76,6 +77,11 @@ def notify_spring_embedding(**context) -> dict:
     result = ti.xcom_pull(task_ids="validate_and_promote")
     new_spot_ids: list[int] = (result or {}).get("new_spot_ids", [])
     return TrendController().notify_spring_embedding(context["run_id"], new_spot_ids)
+
+
+def collect_spot_images(**context) -> dict:
+    """기존 tourist_spot 이미지 우선, 미존재 시 robots 허용 티스토리 원문에서 링크 추출."""
+    return TrendController().collect_spot_images()
 
 
 # ── 감쇠 DAG 태스크 ───────────────────────────────────────────
