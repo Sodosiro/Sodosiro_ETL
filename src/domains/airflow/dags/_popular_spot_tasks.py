@@ -9,9 +9,8 @@ from src.domains.trend.controller.trend_controller import TrendController
 _COLLECTION_TASK_IDS = (
     "collect_search_texts",
     "analyze_and_aggregate",
-    "validate_and_promote",
-    "collect_spot_images",
-    "notify_spring_embedding",
+    "match_and_score_tourist_spots",
+    "calculate_popularity_rank",
 )
 
 
@@ -48,7 +47,7 @@ def collect_search_texts(**context) -> dict:
 
 
 def analyze_and_aggregate(**context) -> dict:
-    """형태소 분석 + 채널 다양성 점수 계산 + trending_spot 저장."""
+    """형태소 분석 + 채널 다양성 점수 계산 → 집계 스냅샷 저장."""
     ti = context["ti"]
     result = ti.xcom_pull(task_ids="collect_search_texts")
     if not result or not result.get("raw_path"):
@@ -59,25 +58,15 @@ def analyze_and_aggregate(**context) -> dict:
     )
 
 
-def validate_and_promote(**context) -> dict:
-    """카카오 로컬 API 검증 → kakao_spot upsert."""
+def match_and_score_tourist_spots(**context) -> dict:
+    """카카오 로컬 검증 → tourist_spot 매칭 → spot_popularity mention_score 누적."""
     ti = context["ti"]
     result = ti.xcom_pull(task_ids="analyze_and_aggregate")
     if not result or not result.get("aggregated_path"):
         raise RuntimeError("집계 스냅샷 경로를 찾을 수 없습니다 (analyze_and_aggregate XCom 누락)")
-    return TrendController().validate_and_promote(result["aggregated_path"])
+    return TrendController().match_and_score_tourist_spots(result["aggregated_path"])
 
 
-def notify_spring_embedding(**context) -> dict:
-    """신규 kakao_spot ID 목록을 Spring 임베딩 파이프라인에 통지."""
-    ti = context["ti"]
-    result = ti.xcom_pull(task_ids="validate_and_promote")
-    new_spot_ids: list[int] = (result or {}).get("new_spot_ids", [])
-    return TrendController().notify_spring_embedding(context["run_id"], new_spot_ids)
-
-
-def collect_spot_images(**context) -> dict:
-    """기존 tourist_spot 이미지 우선, 미존재 시 robots 허용 티스토리 원문에서 링크 추출."""
-    return TrendController().collect_spot_images()
-
-
+def calculate_popularity_rank(**context) -> dict:
+    """mention_score 감쇠 → 종합 인기도 점수 → 카테고리별 순위 태그 갱신."""
+    return TrendController().calculate_popularity_rank()
