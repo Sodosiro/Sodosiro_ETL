@@ -14,8 +14,6 @@ _COLLECTION_TASK_IDS = (
     "notify_spring_embedding",
 )
 
-_DECAY_TASK_IDS = ("apply_decay_and_prune",)
-
 
 # ── 공통 ─────────────────────────────────────────────────────
 
@@ -26,8 +24,7 @@ def start_run(**context) -> dict:
 def finalize(**context) -> dict:
     ti = context["ti"]
     dag_id = context["dag"].dag_id
-    task_ids = _COLLECTION_TASK_IDS if "collect" in dag_id else _DECAY_TASK_IDS
-    stats = {task_id: ti.xcom_pull(task_ids=task_id) for task_id in task_ids}
+    stats = {task_id: ti.xcom_pull(task_ids=task_id) for task_id in _COLLECTION_TASK_IDS}
     failed = [
         t.task_id
         for t in context["dag_run"].get_task_instances(state="failed")
@@ -84,8 +81,3 @@ def collect_spot_images(**context) -> dict:
     return TrendController().collect_spot_images()
 
 
-# ── 감쇠 DAG 태스크 ───────────────────────────────────────────
-
-def apply_decay_and_prune(**context) -> dict:
-    """카테고리별 감쇠 계수 적용 → popularity_score 임계값 미만 레코드 삭제."""
-    return TrendController().apply_decay_and_prune()
