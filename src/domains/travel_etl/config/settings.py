@@ -10,6 +10,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote
 
 # sodosiro-ETL 루트 (src/domains/travel_etl/config/settings.py 기준 4단계 상위)
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -37,7 +38,12 @@ def _env(key: str, default: str = "") -> str:
 
 
 def _build_db_url() -> str:
-    """TRAVEL_DB_URL 이 있으면 그대로, 없으면 POSTGRESS_* 조각으로 조립한다."""
+    """TRAVEL_DB_URL 이 있으면 그대로, 없으면 POSTGRESS_* 조각으로 조립한다.
+
+    조각형 설정의 계정 정보는 PostgreSQL URI 문법에 맞게 인코딩한다. 비밀번호의
+    ``%``, ``@``, ``:`` 등의 문자가 그대로 들어가면 libpq가 URI를 잘못 해석해
+    연결 단계에서 ``UnicodeDecodeError``를 낼 수 있다.
+    """
     url = _env("TRAVEL_DB_URL")
     if url:
         return url
@@ -46,7 +52,10 @@ def _build_db_url() -> str:
     host = _env("TRAVEL_DB_HOST", "localhost")
     port = _env("TRAVEL_DB_PORT", "5432")
     database = _env("POSTGRESS_DATABASE", "travel")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    return (
+        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}"
+        f"@{host}:{port}/{quote(database, safe='')}"
+    )
 
 
 @dataclass(frozen=True)
