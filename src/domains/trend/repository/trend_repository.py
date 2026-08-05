@@ -202,7 +202,10 @@ class TrendRepository:
                            content_id,
                            category,
                            pop_score,
-                           RANK() OVER (PARTITION BY category ORDER BY pop_score DESC) AS cat_rank
+                           ROW_NUMBER() OVER (
+                               PARTITION BY category
+                               ORDER BY pop_score DESC, content_id DESC
+                           ) AS cat_rank
                        FROM scored
                    ),
                    cat_names (code, name) AS (
