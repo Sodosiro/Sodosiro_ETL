@@ -80,7 +80,8 @@ with DAG(
         python_callable=tasks.calculate_popularity_rank,
         doc_md=(
             "mention_score 에 감쇠 계수 적용 → like/review/rating 가중 합산 →\n"
-            "카테고리(1~7)별 RANK() → 상위 10위에 '인기 {카테고리} {N}위' 태그 부여."
+            "카테고리(1~7)별 점수순 단일 순위(동점은 content_id 내림차순) →\n"
+            "상위 10위에 '인기 {카테고리} {N}위' 태그 부여."
         ),
     )
 
