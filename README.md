@@ -115,6 +115,19 @@ uvicorn src.main:app --reload
 
 설정은 루트 `.env`에서 읽습니다 (`.env.example` 복사해서 사용). 예: `APP_NAME`, `DEBUG`.
 
+### 카카오맵 content ID 매칭만 단독 실행
+
+프로젝트 루트에서 아래 명령으로 Airflow 및 다른 ETL 단계 없이
+`match_kakao_map_content_ids` 작업만 실행할 수 있습니다. 루트 `.env`의
+`TRAVEL_DB_URL`, `KAKAO_REST_API_KEY` 등의 설정을 그대로 사용합니다.
+
+```bash
+python -m src.domains.travel_etl.run_kakao_map_match
+```
+
+실행 결과는 JSON으로 출력됩니다. 개별 장소 검색 실패가 하나라도 있으면 종료 코드 `1`을
+반환하므로 스케줄러나 배치 스크립트에서 실패를 감지할 수 있습니다.
+
 ### Airflow (오케스트레이션)
 
 ```bash

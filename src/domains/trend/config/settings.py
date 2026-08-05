@@ -43,23 +43,22 @@ class TrendSettings:
     search_max_pages: int
     search_radius_meters: int
     channel_diversity_bonus: float
-    city_sleep_sec: float      # 도시 간 슬립 (500ms)
-    keyword_sleep_sec: float   # 모든 카카오 API 호출 간 최소 간격 (기본 200ms = 초당 최대 5회)
+    city_sleep_sec: float
+    keyword_sleep_sec: float
 
     # HTTP 클라이언트
     request_timeout_sec: float
     max_retries: int
 
-    # 감쇠 파라미터
-    decay_threshold: float
-    decay_attraction: float   # AT4·AD5
-    decay_restaurant: float   # FD6
-    decay_cafe: float         # CE7
+    # 인기도 점수 가중치
+    mention_weight: float       # 카카오 언급 점수 가중치
+    like_weight: float          # 좋아요 수 가중치
+    review_weight: float        # 리뷰 수 가중치
+    rating_weight: float        # 평점 × 리뷰 수 가중치
 
-    # Spring 통지
-    spring_base_url: str
-    spring_internal_etl_token: str
-    spring_timeout_sec: float
+    # 감쇠 및 랭킹
+    mention_decay_factor: float  # 실행마다 mention_score 에 곱하는 감쇠 계수
+    popularity_top_rank_n: int   # 카테고리별 rank_tag 부여 상위 N위
 
     @classmethod
     def from_env(cls) -> "TrendSettings":
@@ -80,13 +79,12 @@ class TrendSettings:
             keyword_sleep_sec=float(_env("TREND_KEYWORD_SLEEP_SEC", "0.2")),
             request_timeout_sec=float(_env("TREND_REQUEST_TIMEOUT_SEC", "10")),
             max_retries=int(_env("TREND_MAX_RETRIES", "3")),
-            decay_threshold=float(_env("TREND_DECAY_THRESHOLD", "0.01")),
-            decay_attraction=float(_env("TREND_DECAY_ATTRACTION", "0.85")),
-            decay_restaurant=float(_env("TREND_DECAY_RESTAURANT", "0.70")),
-            decay_cafe=float(_env("TREND_DECAY_CAFE", "0.70")),
-            spring_base_url=_env("SPRING_BASE_URL"),
-            spring_internal_etl_token=_env("SPRING_INTERNAL_ETL_TOKEN"),
-            spring_timeout_sec=float(_env("SPRING_TIMEOUT_SEC", "10")),
+            mention_weight=float(_env("TREND_MENTION_WEIGHT", "5.0")),
+            like_weight=float(_env("TREND_LIKE_WEIGHT", "1.0")),
+            review_weight=float(_env("TREND_REVIEW_WEIGHT", "2.0")),
+            rating_weight=float(_env("TREND_RATING_WEIGHT", "0.5")),
+            mention_decay_factor=float(_env("TREND_MENTION_DECAY_FACTOR", "0.99")),
+            popularity_top_rank_n=int(_env("TREND_POPULARITY_TOP_RANK_N", "10")),
         )
 
 

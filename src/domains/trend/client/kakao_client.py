@@ -36,6 +36,7 @@ class KakaoPlace:
     address_name: str
     longitude: float
     latitude: float
+    phone: str = ""
 
 
 class KakaoApiError(RuntimeError):
@@ -62,6 +63,10 @@ class KakaoClient:
 
     def search_cafe(self, query: str, page: int = 1, size: int = 50) -> list[dict]:
         return self._search("cafe", query, page, size)
+
+    def search_image(self, query: str, page: int = 1, size: int = 10) -> list[dict]:
+        """카카오 이미지 검색 결과. 이미지 링크 후보를 얻는 용도이며 파일은 내려받지 않는다."""
+        return self._search("image", query, page, size)
 
     def search_local(
         self,
@@ -131,6 +136,9 @@ class GuardedKakaoClient:
     def search_cafe(self, query: str, page: int = 1, size: int = 50) -> list[dict]:
         return self._guarded(self._inner.search_cafe, query, page, size)
 
+    def search_image(self, query: str, page: int = 1, size: int = 10) -> list[dict]:
+        return self._guarded(self._inner.search_image, query, page, size)
+
     def search_local(
         self,
         keyword: str,
@@ -194,6 +202,7 @@ def select_best_local_place(
                     address_name=address,
                     longitude=float(doc["x"]),
                     latitude=float(doc["y"]),
+                    phone=str(doc.get("phone", "")),
                 ),
             )
         )

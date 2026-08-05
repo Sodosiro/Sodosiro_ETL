@@ -1,13 +1,14 @@
 """인기 관광지 트렌드 DB 접근 계층.
 
-- trending_spot: 형태소 분석 중간 집계 (파이프라인 내부)
-- kakao_spot: 카카오맵 검증을 통과한 최종 장소 (사용자 노출)
-- etl_run: 실행 이력 (travel_repository 와 동일 테이블 공유)
+- trend_source_document : 카카오 검색 원천 URL 중복 수집 방지
+- spot_popularity        : tourist_spot 기반 인기도 점수·순위
+- etl_run               : 실행 이력 (travel_repository 와 동일 테이블 공유)
 """
 from __future__ import annotations
 
 import json
 import logging
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Iterator
@@ -16,31 +17,6 @@ import psycopg2
 import psycopg2.extras
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class TrendingSpotRow:
-    keyword: str
-    city_name: str
-    blog_frequency: int
-    cafe_frequency: int
-    multi_channel: bool
-    promoted: bool = False
-
-
-@dataclass
-class KakaoSpotRow:
-    kakao_place_id: str
-    place_name: str
-    city_name: str
-    address_name: str
-    category_group_code: str
-    category_group_name: str
-    longitude: float
-    latitude: float
-    blog_mention_count: int
-    cafe_mention_count: int
-    popularity_score: float
 
 
 @dataclass(frozen=True)
@@ -54,35 +30,9 @@ class TrendSourceDocumentRow:
     first_run_id: str
 
 
-def _merge_kakao_spot_rows(rows: list[KakaoSpotRow]) -> list[KakaoSpotRow]:
-    """같은 카카오 장소로 매칭된 키워드의 수치를 하나로 합친다.
-
-    PostgreSQL은 하나의 ``INSERT .. ON CONFLICT DO UPDATE`` 문에서 같은
-    conflict key를 두 번 갱신할 수 없다. 서로 다른 트렌드 키워드가 같은
-    ``kakao_place_id``를 반환하는 것은 정상적인 경우이므로, 저장 전에
-    언급 수와 점수를 합산해 장소당 한 행만 남긴다.
-    """
-    merged: dict[str, KakaoSpotRow] = {}
-    for row in rows:
-        existing = merged.get(row.kakao_place_id)
-        if existing is None:
-            merged[row.kakao_place_id] = row
-            continue
-
-        merged[row.kakao_place_id] = KakaoSpotRow(
-            kakao_place_id=existing.kakao_place_id,
-            place_name=existing.place_name,
-            city_name=existing.city_name,
-            address_name=existing.address_name,
-            category_group_code=existing.category_group_code,
-            category_group_name=existing.category_group_name,
-            longitude=existing.longitude,
-            latitude=existing.latitude,
-            blog_mention_count=existing.blog_mention_count + row.blog_mention_count,
-            cafe_mention_count=existing.cafe_mention_count + row.cafe_mention_count,
-            popularity_score=existing.popularity_score + row.popularity_score,
-        )
-    return list(merged.values())
+def _normalize_place_name(value: str) -> str:
+    """공백·괄호 등 표기 차이를 제거해 장소명을 보수적으로 비교한다."""
+    return re.sub(r"[^0-9a-z가-힣]", "", value.lower())
 
 
 class TrendConnectionFactory:
@@ -105,16 +55,10 @@ class TrendConnectionFactory:
 
 
 class TrendRepository:
-    """trending_spot + kakao_spot + etl_run 저장소."""
+    """trend_source_document + spot_popularity + etl_run 저장소."""
 
     def __init__(self, conn) -> None:
         self._conn = conn
-
-    def commit(self) -> None:
-        self._conn.commit()
-
-    def rollback(self) -> None:
-        self._conn.rollback()
 
     # ── 원천 문서 이력 ───────────────────────────────────────
 
@@ -154,124 +98,144 @@ class TrendRepository:
             )
             return cur.rowcount
 
-    # ── trending_spot ────────────────────────────────────────
+    # ── tourist_spot 매칭 ────────────────────────────────────
 
-    def upsert_trending_spots(self, rows: list[TrendingSpotRow]) -> int:
-        """배치 단위 upsert — keyword + city_name 복합 UK 기준."""
-        if not rows:
-            return 0
-        with self._conn.cursor() as cur:
-            psycopg2.extras.execute_values(
-                cur,
-                """INSERT INTO trending_spot
-                       (keyword, city_name, blog_frequency, cafe_frequency,
-                        multi_channel, promoted, collected_at)
-                   VALUES %s
-                   ON CONFLICT (keyword, city_name) DO UPDATE SET
-                       blog_frequency  = EXCLUDED.blog_frequency,
-                       cafe_frequency  = EXCLUDED.cafe_frequency,
-                       multi_channel   = EXCLUDED.multi_channel,
-                       promoted        = EXCLUDED.promoted,
-                       collected_at    = now()""",
-                [
-                    (r.keyword, r.city_name, r.blog_frequency, r.cafe_frequency,
-                     r.multi_channel, r.promoted)
-                    for r in rows
-                ],
-                template="(%s, %s, %s, %s, %s, %s, now())",
-            )
-        return len(rows)
+    def find_tourist_spot(
+        self, place_name: str, city_name: str, longitude: float, latitude: float
+    ) -> tuple[int, int] | None:
+        """장소명·도시·좌표로 tourist_spot 을 매칭한다.
 
-    def mark_promoted(self, keyword: str, city_name: str) -> None:
-        with self._conn.cursor() as cur:
-            cur.execute(
-                "UPDATE trending_spot SET promoted = true WHERE keyword = %s AND city_name = %s",
-                (keyword, city_name),
-            )
-
-    # ── kakao_spot ───────────────────────────────────────────
-
-    def upsert_kakao_spots(self, rows: list[KakaoSpotRow]) -> list[tuple[int, bool]]:
-        """Upsert — 기존 행은 mention_count·popularity_score 누적 가산.
-
-        반환: [(id, is_new), ...] — is_new=True 이면 이번 배치에서 신규 삽입된 행.
+        반환: (content_id, category) 또는 None.
+        - 이름 정규화 일치(완전 > 부분 4자 이상) + 도시 주소 필터 + 1km 이내 좌표 우선.
+        - 좌표가 없는 tourist_spot 은 이름·도시 일치만으로도 후보가 된다.
         """
-        if not rows:
-            return []
-        unique_rows = _merge_kakao_spot_rows(rows)
-        if len(unique_rows) != len(rows):
-            logger.info(
-                "카카오 장소 배치 중복 병합: 입력 %d건 → 저장 %d건",
-                len(rows),
-                len(unique_rows),
-            )
+        city_keyword = city_name[:-1] if city_name.endswith(("시", "군")) else city_name
+        normalized_name = _normalize_place_name(place_name)
+        if not normalized_name:
+            return None
         with self._conn.cursor() as cur:
-            psycopg2.extras.execute_values(
-                cur,
-                """INSERT INTO kakao_spot (
-                       kakao_place_id, place_name, city_name, address_name,
-                       category_group_code, category_group_name,
-                       longitude, latitude,
-                       blog_mention_count, cafe_mention_count, popularity_score,
-                       collected_at
-                   ) VALUES %s
-                   ON CONFLICT (kakao_place_id) DO UPDATE SET
-                       place_name          = EXCLUDED.place_name,
-                       blog_mention_count  = kakao_spot.blog_mention_count + EXCLUDED.blog_mention_count,
-                       cafe_mention_count  = kakao_spot.cafe_mention_count + EXCLUDED.cafe_mention_count,
-                       popularity_score    = kakao_spot.popularity_score + EXCLUDED.popularity_score,
-                       collected_at        = EXCLUDED.collected_at
-                   RETURNING id, (xmax = 0) AS is_new""",
-                [
-                    (
-                        r.kakao_place_id, r.place_name, r.city_name, r.address_name,
-                        r.category_group_code, r.category_group_name,
-                        r.longitude, r.latitude,
-                        r.blog_mention_count, r.cafe_mention_count, r.popularity_score,
-                    )
-                    for r in unique_rows
-                ],
-                template=(
-                    "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
-                ),
-                fetch=True,
+            cur.execute(
+                """WITH input AS (SELECT %s::text AS normalized_name)
+                   SELECT ts.content_id, ts.category
+                   FROM tourist_spot ts
+                   CROSS JOIN input
+                   CROSS JOIN LATERAL (
+                       SELECT regexp_replace(lower(ts.title), '[^0-9a-z가-힣]', '', 'g') AS norm_title
+                   ) t
+                   WHERE (
+                       t.norm_title = input.normalized_name
+                       OR (
+                           char_length(input.normalized_name) >= 4
+                           AND (
+                               position(input.normalized_name IN t.norm_title) > 0
+                               OR position(t.norm_title IN input.normalized_name) > 0
+                           )
+                       )
+                   )
+                   AND ts.addr1 ILIKE %s
+                   AND (
+                       ts.map_x IS NULL
+                       OR ts.map_y IS NULL
+                       OR 6371000 * acos(
+                           LEAST(1.0,
+                               cos(radians(%s)) * cos(radians(ts.map_y::float)) *
+                               cos(radians(ts.map_x::float) - radians(%s)) +
+                               sin(radians(%s)) * sin(radians(ts.map_y::float))
+                           )
+                       ) <= 1000
+                   )
+                   ORDER BY
+                       (t.norm_title = input.normalized_name) DESC,
+                       (ts.map_x IS NOT NULL AND ts.map_y IS NOT NULL) DESC
+                   LIMIT 1""",
+                (normalized_name, f"%{city_keyword}%", latitude, longitude, latitude),
             )
-            return [(row[0], bool(row[1])) for row in cur.fetchall()]
+            row = cur.fetchone()
+        return (int(row[0]), int(row[1])) if row else None
 
-    # ── 감쇠 잡 ─────────────────────────────────────────────
+    # ── spot_popularity ──────────────────────────────────────
 
-    def apply_decay(
+    def accumulate_mention_score(self, content_id: int, score: float) -> None:
+        """매칭된 tourist_spot 의 mention_score 를 누적 가산한다 (멱등 upsert)."""
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO spot_popularity (content_id, mention_score)
+                   VALUES (%s, %s)
+                   ON CONFLICT (content_id) DO UPDATE SET
+                       mention_score = spot_popularity.mention_score + EXCLUDED.mention_score""",
+                (content_id, score),
+            )
+
+    def decay_and_rank_popularity(
         self,
-        decay_attraction: float,
-        decay_restaurant: float,
-        decay_cafe: float,
+        mention_decay: float,
+        mention_weight: float,
+        like_weight: float,
+        review_weight: float,
+        rating_weight: float,
+        top_rank_n: int,
     ) -> int:
-        """카테고리별 감쇠 계수를 적용한다."""
-        with self._conn.cursor() as cur:
-            cur.execute(
-                """UPDATE kakao_spot
-                   SET popularity_score = popularity_score *
-                       CASE category_group_code
-                           WHEN 'AT4' THEN %(attraction)s
-                           WHEN 'AD5' THEN %(attraction)s
-                           WHEN 'FD6' THEN %(restaurant)s
-                           WHEN 'CE7' THEN %(cafe)s
-                           ELSE %(attraction)s
-                       END""",
-                {"attraction": decay_attraction, "restaurant": decay_restaurant, "cafe": decay_cafe},
-            )
-            return cur.rowcount
+        """mention_score 감쇠 → 종합 점수 계산 → 카테고리별 순위 태그 갱신.
 
-    def delete_expired(self, threshold: float) -> int:
-        """popularity_score 임계값 미만 레코드를 삭제한다 (자연 소멸)."""
+        반환: 갱신된 spot_popularity 행 수.
+        """
         with self._conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM kakao_spot WHERE popularity_score < %s",
-                (threshold,),
+                "UPDATE spot_popularity SET mention_score = mention_score * %s",
+                (mention_decay,),
             )
-            count = cur.rowcount
-        logger.info("kakao_spot 자연 소멸: %d건 삭제 (threshold=%.4f)", count, threshold)
-        return count
+            cur.execute(
+                """WITH scored AS (
+                       SELECT
+                           sp.content_id,
+                           ts.category,
+                           (sp.mention_score * %(mw)s
+                            + ts.like_count  * %(lw)s
+                            + ts.review_count * %(rw)s
+                            + ts.avg_rating::float * ts.review_count * %(rrw)s
+                           ) AS pop_score
+                       FROM spot_popularity sp
+                       JOIN tourist_spot ts ON ts.content_id = sp.content_id
+                   ),
+                   ranked AS (
+                       SELECT
+                           content_id,
+                           category,
+                           pop_score,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY category
+                               ORDER BY pop_score DESC, content_id DESC
+                           ) AS cat_rank
+                       FROM scored
+                   ),
+                   cat_names (code, name) AS (
+                       VALUES (1,'식당'), (2,'카페'), (3,'쇼핑'), (4,'관광지'),
+                              (5,'자연'), (6,'액티비티'), (7,'숙박')
+                   )
+                   UPDATE spot_popularity sp
+                   SET
+                       popularity_score = r.pop_score,
+                       category_rank    = r.cat_rank,
+                       rank_tag         = CASE
+                           WHEN r.cat_rank <= %(top_n)s
+                           THEN '인기 ' || cn.name || ' ' || r.cat_rank || '위'
+                           ELSE NULL
+                       END,
+                       calculated_at    = now()
+                   FROM ranked r
+                   JOIN cat_names cn ON cn.code = r.category
+                   WHERE sp.content_id = r.content_id""",
+                {
+                    "mw": mention_weight,
+                    "lw": like_weight,
+                    "rw": review_weight,
+                    "rrw": rating_weight,
+                    "top_n": top_rank_n,
+                },
+            )
+            updated = cur.rowcount
+        logger.info("인기도 순위 갱신: %d건", updated)
+        return updated
 
     # ── 실행 이력 (etl_run 공유) ──────────────────────────────
 

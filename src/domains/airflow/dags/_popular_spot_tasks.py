@@ -9,11 +9,9 @@ from src.domains.trend.controller.trend_controller import TrendController
 _COLLECTION_TASK_IDS = (
     "collect_search_texts",
     "analyze_and_aggregate",
-    "validate_and_promote",
-    "notify_spring_embedding",
+    "match_and_score_tourist_spots",
+    "calculate_popularity_rank",
 )
-
-_DECAY_TASK_IDS = ("apply_decay_and_prune",)
 
 
 # ── 공통 ─────────────────────────────────────────────────────
@@ -25,8 +23,7 @@ def start_run(**context) -> dict:
 def finalize(**context) -> dict:
     ti = context["ti"]
     dag_id = context["dag"].dag_id
-    task_ids = _COLLECTION_TASK_IDS if "collect" in dag_id else _DECAY_TASK_IDS
-    stats = {task_id: ti.xcom_pull(task_ids=task_id) for task_id in task_ids}
+    stats = {task_id: ti.xcom_pull(task_ids=task_id) for task_id in _COLLECTION_TASK_IDS}
     failed = [
         t.task_id
         for t in context["dag_run"].get_task_instances(state="failed")
@@ -50,7 +47,7 @@ def collect_search_texts(**context) -> dict:
 
 
 def analyze_and_aggregate(**context) -> dict:
-    """형태소 분석 + 채널 다양성 점수 계산 + trending_spot 저장."""
+    """형태소 분석 + 채널 다양성 점수 계산 → 집계 스냅샷 저장."""
     ti = context["ti"]
     result = ti.xcom_pull(task_ids="collect_search_texts")
     if not result or not result.get("raw_path"):
@@ -61,25 +58,15 @@ def analyze_and_aggregate(**context) -> dict:
     )
 
 
-def validate_and_promote(**context) -> dict:
-    """카카오 로컬 API 검증 → kakao_spot upsert."""
+def match_and_score_tourist_spots(**context) -> dict:
+    """카카오 로컬 검증 → tourist_spot 매칭 → spot_popularity mention_score 누적."""
     ti = context["ti"]
     result = ti.xcom_pull(task_ids="analyze_and_aggregate")
     if not result or not result.get("aggregated_path"):
         raise RuntimeError("집계 스냅샷 경로를 찾을 수 없습니다 (analyze_and_aggregate XCom 누락)")
-    return TrendController().validate_and_promote(result["aggregated_path"])
+    return TrendController().match_and_score_tourist_spots(result["aggregated_path"])
 
 
-def notify_spring_embedding(**context) -> dict:
-    """신규 kakao_spot ID 목록을 Spring 임베딩 파이프라인에 통지."""
-    ti = context["ti"]
-    result = ti.xcom_pull(task_ids="validate_and_promote")
-    new_spot_ids: list[int] = (result or {}).get("new_spot_ids", [])
-    return TrendController().notify_spring_embedding(context["run_id"], new_spot_ids)
-
-
-# ── 감쇠 DAG 태스크 ───────────────────────────────────────────
-
-def apply_decay_and_prune(**context) -> dict:
-    """카테고리별 감쇠 계수 적용 → popularity_score 임계값 미만 레코드 삭제."""
-    return TrendController().apply_decay_and_prune()
+def calculate_popularity_rank(**context) -> dict:
+    """mention_score 감쇠 → 종합 인기도 점수 → 카테고리별 순위 태그 갱신."""
+    return TrendController().calculate_popularity_rank()
