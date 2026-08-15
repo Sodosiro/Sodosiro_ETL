@@ -23,3 +23,5 @@ psql $url -v ON_ERROR_STOP=1 -f database/migrations/20260721_etl_run_composite_k
 `20260731_kakao_spot_detail_and_multiple_images.sql`은 카카오 로컬 검색 API가 응답하는 전화번호를 `kakao_spot`에 저장하기 위한 컬럼을 추가한다.
 
 `20260732_remove_kakao_map_detail_schema.sql`은 이전 비공개 카카오맵 상세 패널 연동에서 만든 다중 사진·상세 정보 구조를 제거한다. `KAKAO_PLACE` 사진 행을 삭제하고, TourAPI 이미지가 있으면 이를 우선해 장소당 단일 이미지 링크만 남긴 뒤 `kakao_spot_id` 단일 유니크 제약을 복구한다.
+
+`20260809_create_cultural_festival.sql`은 `gangwon_festival_daily` DAG가 사용하는 `cultural_festival` 테이블을 생성한다. 기존 관광지 테이블과 독립적이며, 원천 식별 해시(`source_key`) 기준 UPSERT로 재실행해도 중복 적재되지 않는다.

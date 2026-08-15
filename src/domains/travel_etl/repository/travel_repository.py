@@ -193,6 +193,36 @@ class TravelRepository:
             ],
         )
 
+    def synchronize_spot_states(self) -> dict[str, int]:
+        """``tourist_spot``을 기준으로 ETL 상태 행을 복구하고 고아 상태 행을 제거한다.
+
+        상태가 사라진 관광지는 원본 상세 정보와 이미지 보강 여부를 알 수 없으므로,
+        모든 후속 처리 큐를 다시 실행할 수 있는 기본 pending 상태로 생성한다.
+        기존 상태 행은 절대 갱신하지 않는다.
+        """
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """DELETE FROM etl_spot_state state
+                   WHERE NOT EXISTS (
+                       SELECT 1 FROM tourist_spot spot WHERE spot.content_id = state.content_id
+                   )"""
+            )
+            removed = cur.rowcount
+            cur.execute(
+                """INSERT INTO etl_spot_state (
+                       content_id, content_hash, image_pending, image_absent
+                   )
+                   SELECT spot.content_id, '', spot.first_image IS NOT NULL, spot.first_image IS NULL
+                   FROM tourist_spot spot
+                   LEFT JOIN etl_spot_state state ON state.content_id = spot.content_id
+                   WHERE state.content_id IS NULL
+                   ON CONFLICT (content_id) DO NOTHING"""
+            )
+            restored = cur.rowcount
+            cur.execute("SELECT count(*) FROM etl_spot_state")
+            total = cur.fetchone()[0]
+        return {"restored": restored, "removed_orphans": removed, "total": total}
+
     # ── pending 큐 ─────────────────────────────────────────
 
     def fetch_pending(self, kind: str, limit: int) -> list[int]:

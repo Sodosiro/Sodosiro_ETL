@@ -10,7 +10,7 @@ from src.domains.travel_etl.controller.travel_etl_controller import TravelEtlCon
 STAT_TASK_IDS = (
     "ensure_base_codes", "snapshot_area_based", "load_spot_snapshot",
     "enrich_detail_common", "enrich_detail_intro", "collect_detail_info", "collect_images",
-    "recover_missing_images", "notify_spring",
+    "recover_missing_images", "synchronize_spot_states", "notify_spring",
 )
 
 
@@ -25,6 +25,11 @@ def sync_codes() -> dict:
 def ensure_base_codes() -> dict:
     """신규 환경 부트스트랩 — 시군구 코드가 없을 때만 코드표를 동기화한다."""
     return TravelEtlController().ensure_base_codes()
+
+
+def synchronize_spot_states() -> dict:
+    """tourist_spot을 기준으로 누락된 etl_spot_state 행을 복구한다."""
+    return TravelEtlController().synchronize_spot_states()
 
 
 def download_spot_snapshot(**context) -> dict:

@@ -76,6 +76,13 @@ class TravelEtlService:
         logger.info("시군구 코드 없음 (%s) — 코드표 동기화 실행", self._settings.ldong_regn_code)
         return {"synced": True, **self.sync_codes()}
 
+    def synchronize_spot_states(self) -> dict:
+        """업무 관광지 기준으로 사라진 ETL 상태 행을 멱등 복구한다."""
+        with self._connections.open() as repo:
+            result = repo.synchronize_spot_states()
+        logger.info("ETL 관광지 상태 동기화 완료: %s", result)
+        return result
+
     def download_spot_snapshot(self, execution_date: date) -> dict:
         """논리 실행일 스냅샷을 재사용하거나 없을 때만 areaBasedList2를 수집한다."""
         store = AreaBasedSnapshotStore(self._settings.snapshot_dir)

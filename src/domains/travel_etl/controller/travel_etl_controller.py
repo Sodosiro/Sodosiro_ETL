@@ -25,6 +25,9 @@ class TravelEtlController:
     def ensure_base_codes(self) -> dict:
         return self._service.ensure_base_codes()
 
+    def synchronize_spot_states(self) -> dict:
+        return self._service.synchronize_spot_states()
+
     def download_spot_snapshot(self, execution_date: date) -> dict:
         return self._service.download_spot_snapshot(execution_date)
 
