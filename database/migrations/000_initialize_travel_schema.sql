@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS spot_embedding (
     keyword_text TEXT
 );
 
+CREATE TABLE IF NOT EXISTS spot_related_recommendation (
+    content_id          BIGINT       PRIMARY KEY REFERENCES tourist_spot(content_id) ON DELETE CASCADE,
+    related_content_ids TEXT         NOT NULL,
+    scoring_version     VARCHAR(30)  NOT NULL,
+    generated_at        TIMESTAMP(6) NOT NULL,
+    expires_at          TIMESTAMP(6) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS etl_spot_state (
     content_id BIGINT PRIMARY KEY,
     embed_pending BOOLEAN NOT NULL DEFAULT true,
@@ -103,6 +111,13 @@ CREATE INDEX IF NOT EXISTS idx_spot_ldong_region
 
 CREATE INDEX IF NOT EXISTS idx_spot_sigungu
     ON tourist_spot (sigungu_code);
+
+CREATE INDEX IF NOT EXISTS idx_spot_related_recommendation_expires
+    ON spot_related_recommendation (expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_spot_embedding_cosine
+    ON spot_embedding USING hnsw (embedding vector_cosine_ops)
+    WHERE embedding IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_state_image_recovery
     ON etl_spot_state (content_id)
