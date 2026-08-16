@@ -198,6 +198,7 @@ class TravelRepository:
 
         상태가 사라진 관광지는 원본 상세 정보와 이미지 보강 여부를 알 수 없으므로,
         모든 후속 처리 큐를 다시 실행할 수 있는 기본 pending 상태로 생성한다.
+        단, 이미 유효한 임베딩 벡터가 있으면 임베딩 재생성을 요청하지 않는다.
         기존 상태 행은 절대 갱신하지 않는다.
         """
         with self._conn.cursor() as cur:
@@ -210,9 +211,14 @@ class TravelRepository:
             removed = cur.rowcount
             cur.execute(
                 """INSERT INTO etl_spot_state (
-                       content_id, content_hash, image_pending, image_absent
+                       content_id, content_hash, image_pending, image_absent, embed_pending
                    )
-                   SELECT spot.content_id, '', spot.first_image IS NOT NULL, spot.first_image IS NULL
+                   SELECT spot.content_id, '', spot.first_image IS NOT NULL, spot.first_image IS NULL,
+                          NOT EXISTS (
+                              SELECT 1 FROM spot_embedding embedding
+                              WHERE embedding.content_id = spot.content_id
+                                AND embedding.embedding IS NOT NULL
+                          )
                    FROM tourist_spot spot
                    LEFT JOIN etl_spot_state state ON state.content_id = spot.content_id
                    WHERE state.content_id IS NULL
