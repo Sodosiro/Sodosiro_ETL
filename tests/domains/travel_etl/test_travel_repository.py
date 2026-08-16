@@ -30,7 +30,7 @@ class _Connection:
 
 
 class SynchronizeSpotStatesTest(unittest.TestCase):
-    def test_sync_completes_only_states_with_a_current_valid_embedding(self) -> None:
+    def test_sync_completes_states_with_a_valid_embedding(self) -> None:
         connection = _Connection()
 
         TravelRepository(connection).synchronize_spot_states()
@@ -38,8 +38,8 @@ class SynchronizeSpotStatesTest(unittest.TestCase):
         complete_query = connection.cursor_instance.executed[1]
         restore_query = connection.cursor_instance.executed[2]
         self.assertIn("SET embed_pending = false", complete_query)
-        self.assertIn("embedding.created_at >= state.last_etl_at", complete_query)
         self.assertIn("embedding.embedding IS NOT NULL", complete_query)
+        self.assertNotIn("embedding.created_at >= state.last_etl_at", complete_query)
         self.assertIn("embed_pending", restore_query)
         self.assertIn("NOT EXISTS", restore_query)
         self.assertIn("embedding.content_id = spot.content_id", restore_query)
