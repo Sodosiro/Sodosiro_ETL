@@ -1,7 +1,7 @@
 """관광지 ETL 상태 복구 DAG.
 
 ``tourist_spot``은 남아 있지만 ``etl_spot_state``가 삭제되었을 때 누락 상태 행을
-기본 pending 상태로 되살린다. 최신 유효 임베딩이 있는 pending 상태는 완료로 보정한다.
+기본 pending 상태로 되살린다. 유효 임베딩이 있는 pending 상태는 완료로 보정한다.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ default_args = {
 
 with DAG(
     dag_id="travel_spot_state_sync",
-    description="누락된 ETL 상태를 복구하고 최신 임베딩 완료 상태를 보정",
+    description="누락된 ETL 상태를 복구하고 임베딩 완료 상태를 보정",
     schedule="30 3 * * *",
     start_date=pendulum.datetime(2026, 8, 15, tz=KST),
     catchup=False,
@@ -38,7 +38,7 @@ with DAG(
     synchronize_spot_states = PythonOperator(
         task_id="synchronize_spot_states",
         python_callable=tasks.synchronize_spot_states,
-        doc_md="누락 상태 행을 복구하고, 최신 유효 임베딩이 있는 pending 상태만 완료로 보정합니다.",
+        doc_md="누락 상태 행을 복구하고, 유효 임베딩이 있는 pending 상태만 완료로 보정합니다.",
     )
 
     finalize = PythonOperator(
