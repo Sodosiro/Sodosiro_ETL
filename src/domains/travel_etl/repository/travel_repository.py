@@ -198,8 +198,8 @@ class TravelRepository:
 
         상태가 사라진 관광지는 원본 상세 정보와 이미지 보강 여부를 알 수 없으므로,
         모든 후속 처리 큐를 다시 실행할 수 있는 기본 pending 상태로 생성한다.
-        단, 이미 유효한 임베딩 벡터가 있으면 임베딩 재생성을 요청하지 않는다.
-        기존 상태 행은 절대 갱신하지 않는다.
+        이미 유효한 임베딩이 최신 ETL 입력 이후 생성된 경우에는 기존 상태 행도
+        임베딩 완료로 보정한다. 반대로 입력보다 오래된 임베딩은 재생성 대상으로 둔다.
         """
         with self._conn.cursor() as cur:
             cur.execute(
@@ -209,6 +209,18 @@ class TravelRepository:
                    )"""
             )
             removed = cur.rowcount
+            cur.execute(
+                """UPDATE etl_spot_state state
+                   SET embed_pending = false, last_etl_at = now()
+                   WHERE state.embed_pending
+                     AND EXISTS (
+                         SELECT 1 FROM spot_embedding embedding
+                         WHERE embedding.content_id = state.content_id
+                           AND embedding.embedding IS NOT NULL
+                           AND embedding.created_at >= state.last_etl_at
+                     )"""
+            )
+            completed_embeddings = cur.rowcount
             cur.execute(
                 """INSERT INTO etl_spot_state (
                        content_id, content_hash, image_pending, image_absent, embed_pending
@@ -227,7 +239,12 @@ class TravelRepository:
             restored = cur.rowcount
             cur.execute("SELECT count(*) FROM etl_spot_state")
             total = cur.fetchone()[0]
-        return {"restored": restored, "removed_orphans": removed, "total": total}
+        return {
+            "restored": restored,
+            "completed_embeddings": completed_embeddings,
+            "removed_orphans": removed,
+            "total": total,
+        }
 
     # ── pending 큐 ─────────────────────────────────────────
 
