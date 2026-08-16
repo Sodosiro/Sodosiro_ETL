@@ -1,0 +1,2 @@
+# Runtime dependencies for the custom Airflow image.
+kiwipiepy==0.23.2

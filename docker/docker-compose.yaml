@@ -1,5 +1,8 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.10.4
+  image: sodosiro-airflow:2.10.4-kiwi
+  build:
+    context: .
+    dockerfile: Dockerfile
 
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -14,8 +17,6 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
     # scheduler 컨테이너의 /health(8974) 엔드포인트를 활성화한다.
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
-
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
 
     # travel_etl 패키지(src.domains.travel_etl) 임포트 경로
     PYTHONPATH: /opt/airflow/sodosiro

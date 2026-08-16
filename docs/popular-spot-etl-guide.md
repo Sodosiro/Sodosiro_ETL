@@ -232,8 +232,11 @@ CREATE TABLE kakao_spot (
 
 ## 7. 의존성
 
+`kiwipiepy`는 `docker/requirements.txt`에 고정되어 있으며, Airflow 컨테이너는
+`docker/Dockerfile`로 빌드한 커스텀 이미지에서 실행한다.
+
 ```bash
-pip install kiwipiepy        # 한국어 형태소 분석기 (NNP·NNG 추출)
+docker compose --env-file docker/.env -f docker/docker-compose.yaml build
 ```
 
 > **참고**: Spring BE 설계 문서에서는 Java Komoran을 사용하지만 Python ETL에서는 동일한 POS 태그 체계(NNP/NNG)를 지원하는 `kiwipiepy`로 대체한다.
@@ -296,7 +299,7 @@ Authorization: X-Internal-ETL-Token: {SPRING_INTERNAL_ETL_TOKEN}
 ### 최초 배포
 
 - [ ] `KAKAO_REST_API_KEY` 환경변수 설정
-- [ ] `pip install kiwipiepy` 설치 (Airflow worker 이미지 포함)
+- [ ] 커스텀 Airflow 이미지 빌드 (`docker/requirements.txt`에 `kiwipiepy` 포함)
 - [ ] DB 마이그레이션 적용 (섹션 8)
 - [ ] Spring BE `/internal/etl/trend/refresh` 엔드포인트 구현 확인
 - [ ] `popular_spot_collection` DAG Unpause
@@ -317,7 +320,7 @@ Authorization: X-Internal-ETL-Token: {SPRING_INTERNAL_ETL_TOKEN}
 | 증상 | 원인 | 조치 |
 |------|------|------|
 | `collect_search_texts` 실패 | `KAKAO_REST_API_KEY` 미설정 또는 만료 | 키 재발급 후 환경변수 갱신 |
-| `analyze_and_aggregate` ImportError | `kiwipiepy` 미설치 | `pip install kiwipiepy` |
+| `analyze_and_aggregate` ImportError | 커스텀 Airflow 이미지가 오래됨 | `docker compose ... build` 후 scheduler·webserver 재생성 |
 | `validate_and_promote` 429 | 카카오 로컬 API 쿼터 초과 | `TREND_TOP_N=15` 로 낮추거나 DAG 스케줄 2시간으로 변경 |
 | `notify_spring_embedding` 실패 | Spring 서버 다운 | etl_run.stats에 오류 기록됨, 다음 배치에서 재시도 없음 — Spring 측 보상 필요 |
 | kakao_spot 점수 이상 급등 | 수집 DAG 중복 실행 | `max_active_runs=1` 확인, 수동으로 점수 보정 필요 |
