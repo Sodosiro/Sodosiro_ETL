@@ -29,6 +29,8 @@ x-airflow-common: &airflow-common
     IMAGE_RECOVERY_BATCH_LIMIT: ${IMAGE_RECOVERY_BATCH_LIMIT:-300}
     # 원천 areaBasedList2 CSV 스냅샷. 모든 Airflow 컨테이너에서 동일하게 접근해야 한다.
     TRAVEL_SNAPSHOT_DIR: ${TRAVEL_SNAPSHOT_DIR:-/data/travel/raw}
+    # 인기 관광지 트렌드 수집 원천 스냅샷
+    TREND_SNAPSHOT_DIR: ${TREND_SNAPSHOT_DIR:-/data/trend/raw}
     API_MIN_INTERVAL_SEC: ${API_MIN_INTERVAL_SEC:-1.0}
     TRAVEL_LDONG_REGN_CODE: ${TRAVEL_LDONG_REGN_CODE:-51}
     # 비우면 관광·문화·음식·쇼핑·레포츠 등 전체 콘텐츠 유형
@@ -38,6 +40,16 @@ x-airflow-common: &airflow-common
     SPRING_INTERNAL_ETL_TOKEN: ${SPRING_INTERNAL_ETL_TOKEN:-}
     # 테스트 안전장치: 한 DAG 실행에서 Spring AI에 통지할 최대 건수
     SPRING_NOTIFY_LIMIT: ${SPRING_NOTIFY_LIMIT:-10}
+
+    # 인기 검색어 sync (BE Redis Sorted Set → search_keyword_trend 스냅샷)
+    # REDIS_URL 을 주면 우선하고, 없으면 아래 조각으로 조립한다. host 는 공용 네트워크의 redis 서비스명.
+    REDIS_URL: ${REDIS_URL:-}
+    REDIS_HOST: ${REDIS_HOST:-redis}
+    REDIS_PORT: ${REDIS_PORT:-6379}
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    REDIS_DATABASE: ${REDIS_DATABASE:-0}
+    # BE SearchTrendingService.WINDOW_DAYS 와 반드시 일치시킬 것
+    SEARCH_TREND_WINDOW_DAYS: ${SEARCH_TREND_WINDOW_DAYS:-30}
 
   volumes:
     - ../src/domains/airflow/dags:/opt/airflow/dags
