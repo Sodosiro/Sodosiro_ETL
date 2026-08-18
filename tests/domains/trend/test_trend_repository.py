@@ -2,6 +2,7 @@ import unittest
 
 from src.domains.trend.repository.trend_repository import (
     KakaoSpotRow,
+    _normalize_place_name,
     _merge_kakao_spot_rows,
 )
 
@@ -37,6 +38,12 @@ class MergeKakaoSpotRowsTest(unittest.TestCase):
         merged = _merge_kakao_spot_rows([_row("place-1", 1, 0, 0.5), _row("place-2", 2, 1, 1.0)])
 
         self.assertEqual([row.kakao_place_id for row in merged], ["place-1", "place-2"])
+
+
+class TouristSpotNameNormalizationTest(unittest.TestCase):
+    def test_removes_spacing_and_punctuation_differences(self) -> None:
+        self.assertEqual(_normalize_place_name("코레스코 치악산 콘도"), "코레스코치악산콘도")
+        self.assertEqual(_normalize_place_name("오죽헌(강릉)"), "오죽헌강릉")
 
 
 if __name__ == "__main__":
