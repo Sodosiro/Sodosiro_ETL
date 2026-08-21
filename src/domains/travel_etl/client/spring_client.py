@@ -42,6 +42,20 @@ class SpringClient:
             accepted += self._notify_once(run_id, content_ids[start : start + batch_size])
         return accepted
 
+    def post_review_requests(self, run_id: str) -> dict:
+        url = f"{self._settings.spring_base_url}/internal/etl/notifications/review-requests"
+        payload = {"runId": run_id}
+        last_error: Exception | None = None
+        for attempt in range(self._settings.max_retries + 1):
+            try:
+                return self._post_json(url, payload)
+            except (requests.ConnectionError, requests.Timeout, _RetryableStatus) as e:
+                last_error = e
+                delay = 2**attempt
+                logger.warning("리뷰 알림 요청 재시도 %d회차 (%s) — %.0fs 대기", attempt + 1, e, delay)
+                time.sleep(delay)
+        raise SpringNotifyError(f"리뷰 알림 요청 실패: {last_error}")
+
     def _notify_once(self, run_id: str, batch: list[int]) -> int:
         url = f"{self._settings.spring_base_url}/internal/etl/travel/refresh"
         payload = {"runId": run_id, "contentIds": batch}
@@ -69,6 +83,22 @@ class SpringClient:
             raise SpringNotifyError(f"HTTP {response.status_code}: {response.text[:200]}")
         body = response.json() if response.content else {}
         return int(body.get("accepted", len(payload["contentIds"])))
+
+    def _post_json(self, url: str, payload: dict) -> dict:
+        response = self._session.post(
+            url,
+            json=payload,
+            headers={"X-Internal-ETL-Token": self._settings.spring_internal_etl_token},
+            timeout=self._settings.spring_timeout_sec,
+        )
+        if response.status_code >= 500:
+            raise _RetryableStatus(f"HTTP {response.status_code}")
+        if response.status_code >= 400:
+            raise SpringNotifyError(f"HTTP {response.status_code}: {response.text[:200]}")
+        body = response.json() if response.content else {}
+        if not isinstance(body, dict):
+            raise SpringNotifyError("리뷰 알림 응답 형식이 객체가 아닙니다")
+        return body
 
 class _RetryableStatus(RuntimeError):
     """5xx — 재시도 대상."""

@@ -28,6 +28,9 @@ class TravelEtlController:
     def synchronize_spot_states(self) -> dict:
         return self._service.synchronize_spot_states()
 
+    def finish_expired_courses(self) -> dict:
+        return self._service.finish_expired_courses()
+
     def download_spot_snapshot(self, execution_date: date) -> dict:
         return self._service.download_spot_snapshot(execution_date)
 

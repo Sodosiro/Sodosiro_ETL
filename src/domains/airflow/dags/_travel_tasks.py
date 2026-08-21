@@ -32,6 +32,11 @@ def synchronize_spot_states() -> dict:
     return TravelEtlController().synchronize_spot_states()
 
 
+def finish_expired_courses() -> dict:
+    """KST 기준 전날 end_date 인 코스를 FINISHED 로 전환한다."""
+    return TravelEtlController().finish_expired_courses()
+
+
 def download_spot_snapshot(**context) -> dict:
     """원천 목록을 CSV로 저장하고 XCom에는 작은 경로 정보만 남긴다."""
     execution_date = context["logical_date"].in_timezone("Asia/Seoul").date()

@@ -26,6 +26,7 @@ from src.domains.travel_etl.controller.dto.models import (
     TouristSpotRow,
 )
 from src.domains.travel_etl.constants.tourist_category import classify_tourist_category
+from src.domains.travel_etl.service.restdate_normalizer import normalize_restdate
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ class DetailIntroNormalizer(Normalizer[DetailIntroRow]):
             content_id=content_id,
             infocenter=infocenter[:200] if infocenter else None,
             usetime=_text(item, "usetime"),
-            restdate=_text(item, "restdate"),
+            restdate=normalize_restdate(_text(item, "restdate")),
             parking=_text(item, "parking"),
             expguide=_text(item, "expguide"),
         )

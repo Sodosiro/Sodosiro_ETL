@@ -83,6 +83,14 @@ class TravelEtlService:
         logger.info("ETL 관광지 상태 동기화 완료: %s", result)
         return result
 
+    def finish_expired_courses(self) -> dict:
+        """KST 자정 배치에서 전날 종료 여행을 완료 상태로 전환한다."""
+        with self._connections.open() as repo:
+            finished = repo.finish_expired_courses()
+        result = {"finished_courses": finished}
+        logger.info("만료 여행 완료 상태 전환: %s", result)
+        return result
+
     def download_spot_snapshot(self, execution_date: date) -> dict:
         """논리 실행일 스냅샷을 재사용하거나 없을 때만 areaBasedList2를 수집한다."""
         store = AreaBasedSnapshotStore(self._settings.snapshot_dir)

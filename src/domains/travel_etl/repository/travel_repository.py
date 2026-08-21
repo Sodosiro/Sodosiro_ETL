@@ -244,6 +244,19 @@ class TravelRepository:
             "total": total,
         }
 
+    def finish_expired_courses(self) -> int:
+        with self._conn.cursor() as cur:
+            cur.execute(
+                """UPDATE course
+                   SET status = 'FINISHED',
+                       finished_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul',
+                       updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
+                   WHERE is_confirmed = true
+                     AND status <> 'FINISHED'
+                     AND end_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date"""
+            )
+            return cur.rowcount
+
     # ── pending 큐 ─────────────────────────────────────────
 
     def fetch_pending(self, kind: str, limit: int) -> list[int]:
