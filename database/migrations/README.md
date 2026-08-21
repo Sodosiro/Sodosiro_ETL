@@ -22,4 +22,6 @@ psql $url -v ON_ERROR_STOP=1 -f database/migrations/20260721_etl_run_composite_k
 
 `20260731_kakao_spot_detail_and_multiple_images.sql`은 카카오 로컬 검색 API가 응답하는 전화번호를 `kakao_spot`에 저장하기 위한 컬럼을 추가한다.
 
+`20260821_course_finished_at.sql`은 `course.finished_at` 컬럼과 리뷰 유도 알림 대상 조회 인덱스를 추가한다. **`course_status_sync` DAG를 활성화하기 전에 반드시 적용한다.**
+
 `20260732_remove_kakao_map_detail_schema.sql`은 이전 비공개 카카오맵 상세 패널 연동에서 만든 다중 사진·상세 정보 구조를 제거한다. `KAKAO_PLACE` 사진 행을 삭제하고, TourAPI 이미지가 있으면 이를 우선해 장소당 단일 이미지 링크만 남긴 뒤 `kakao_spot_id` 단일 유니크 제약을 복구한다.
