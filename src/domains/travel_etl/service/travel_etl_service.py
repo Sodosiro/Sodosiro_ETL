@@ -24,6 +24,9 @@ from src.domains.travel_etl.client.public_data_client import (
 from src.domains.travel_etl.client.spring_client import SpringClient
 from src.domains.travel_etl.config.settings import TravelEtlSettings, get_settings
 from src.domains.travel_etl.controller.dto.models import StageStats
+from src.domains.travel_etl.repository.active_course_cache_repository import (
+    ActiveCourseCacheRepository,
+)
 from src.domains.travel_etl.repository.travel_repository import ConnectionFactory, TravelRepository
 from src.domains.travel_etl.service.normalizer import NormalizerFactory
 from src.domains.travel_etl.service.rate_limiter import (
@@ -84,10 +87,21 @@ class TravelEtlService:
         return result
 
     def finish_expired_courses(self) -> dict:
-        """KST 자정 배치에서 전날 종료 여행을 완료 상태로 전환한다."""
+        """KST 자정 배치에서 전날 종료 여행을 완료 상태로 전환하고,
+        근처 찜 알림이 참조하는 Redis 활성 코스 캐시를 함께 무효화한다.
+        """
         with self._connections.open() as repo:
-            finished = repo.finish_expired_courses()
-        result = {"finished_courses": finished}
+            finished_user_ids = repo.finish_expired_courses()
+
+        evicted = 0
+        if finished_user_ids:
+            cache = ActiveCourseCacheRepository(self._settings.redis_url)
+            try:
+                evicted = cache.evict(finished_user_ids)
+            finally:
+                cache.close()
+
+        result = {"finished_courses": len(finished_user_ids), "evicted_active_course_caches": evicted}
         logger.info("만료 여행 완료 상태 전환: %s", result)
         return result
 

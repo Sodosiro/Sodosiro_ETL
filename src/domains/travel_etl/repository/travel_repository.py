@@ -244,7 +244,8 @@ class TravelRepository:
             "total": total,
         }
 
-    def finish_expired_courses(self) -> int:
+    def finish_expired_courses(self) -> list[int]:
+        """완료 처리된 코스의 user_id 목록을 반환한다 (근처 알림용 Redis 활성 코스 캐시 무효화에 사용)."""
         with self._conn.cursor() as cur:
             cur.execute(
                 """UPDATE course
@@ -253,9 +254,10 @@ class TravelRepository:
                        updated_at = CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul'
                    WHERE is_confirmed = true
                      AND status <> 'FINISHED'
-                     AND end_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date"""
+                     AND end_date < (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Seoul')::date
+                   RETURNING user_id"""
             )
-            return cur.rowcount
+            return [row[0] for row in cur.fetchall()]
 
     # ── pending 큐 ─────────────────────────────────────────
 

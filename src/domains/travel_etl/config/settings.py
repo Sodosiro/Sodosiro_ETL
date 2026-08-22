@@ -58,6 +58,18 @@ def _build_db_url() -> str:
     )
 
 
+def _build_redis_url() -> str:
+    url = _env("REDIS_URL")
+    if url:
+        return url
+    host = _env("REDIS_HOST", "localhost")
+    port = _env("REDIS_PORT", "6379")
+    db = _env("REDIS_DATABASE", "0")
+    password = _env("REDIS_PASSWORD")
+    auth = f":{password}@" if password else ""
+    return f"redis://{auth}{host}:{port}/{db}"
+
+
 @dataclass(frozen=True)
 class TravelEtlSettings:
     """여행지 ETL 전역 설정 (불변)."""
@@ -65,6 +77,7 @@ class TravelEtlSettings:
     public_data_base_url: str
     public_data_api_key: str
     db_url: str
+    redis_url: str
     content_type_id: str | None # 비우면 관광·문화·음식·쇼핑·레포츠 등 전체 유형
     ldong_regn_code: str         # 법정동 시도 코드 (51 = 강원특별자치도)
     page_size: int              # 목록 API numOfRows
@@ -86,6 +99,7 @@ class TravelEtlSettings:
             public_data_base_url=_env("PUBLIC_DATA_BASE_URL"),
             public_data_api_key=_env("PUBLIC_DATA_API_KEY"),
             db_url=_build_db_url(),
+            redis_url=_build_redis_url(),
             snapshot_dir=_env("TRAVEL_SNAPSHOT_DIR", str(_PROJECT_ROOT / "data" / "travel" / "raw")),
             content_type_id=_env("TRAVEL_CONTENT_TYPE_ID") or None,
             ldong_regn_code=_env("TRAVEL_LDONG_REGN_CODE", "51"),
