@@ -157,13 +157,16 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
             return None
         lcls_systm1 = _text(item, "lclsSystm1")
         lcls_systm2 = _text(item, "lclsSystm2")
-        category = classify_tourist_category(lcls_systm1, lcls_systm2)
+        lcls_systm3 = _text(item, "lclsSystm3")
+        category = classify_tourist_category(lcls_systm1, lcls_systm2, lcls_systm3)
         if category is None:
             logger.warning(
-                "지원하지 않는 TourAPI 분류로 격리: contentid=%s, lclsSystm1=%s, lclsSystm2=%s",
+                "지원하지 않거나 제외 대상인 TourAPI 분류로 격리: "
+                "contentid=%s, lclsSystm1=%s, lclsSystm2=%s, lclsSystm3=%s",
                 content_id,
                 lcls_systm1,
                 lcls_systm2,
+                lcls_systm3,
             )
             return None
         return TouristSpotRow(
