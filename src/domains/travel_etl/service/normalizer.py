@@ -36,6 +36,7 @@ T = TypeVar("T")
 _LON_RANGE = (Decimal("124"), Decimal("132"))
 _LAT_RANGE = (Decimal("33"), Decimal("39"))
 _CONTENT_HASH_VERSION = "v4-drop-legacy-area-code"
+_GANGWON_ADDR_KEYWORD = "강원"
 
 
 def _text(item: dict, key: str) -> str | None:
@@ -137,13 +138,22 @@ class CategoryNormalizer(Normalizer[CategoryRow]):
 
 
 class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
-    """areaBasedList2 item → tourist_spot 행. contentid·title 없으면 격리."""
+    """areaBasedList2 item → tourist_spot 행. contentid·title 누락, 비(非)강원 주소면 격리."""
 
     def normalize(self, item: dict) -> TouristSpotRow | None:
         content_id = _int(item, "contentid")
         title = _text(item, "title")
         if content_id is None or title is None:
             logger.warning("필수값 누락으로 격리: contentid=%s", item.get("contentid"))
+            return None
+        addr1 = _text(item, "addr1")
+        if addr1 is None or _GANGWON_ADDR_KEYWORD not in addr1:
+            logger.warning(
+                "강원 지역이 아닌 주소로 격리: contentid=%s, title=%s, addr1=%s",
+                content_id,
+                title,
+                addr1,
+            )
             return None
         lcls_systm1 = _text(item, "lclsSystm1")
         lcls_systm2 = _text(item, "lclsSystm2")
@@ -160,7 +170,7 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
             content_id=content_id,
             content_type_id=_text(item, "contenttypeid"),
             title=title[:200],
-            addr1=_text(item, "addr1"),
+            addr1=addr1,
             addr2=_text(item, "addr2"),
             zipcode=_text(item, "zipcode"),
             map_x=_in_range(_decimal(item, "mapx"), _LON_RANGE),
