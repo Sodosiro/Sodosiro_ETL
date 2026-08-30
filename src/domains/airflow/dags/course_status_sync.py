@@ -1,4 +1,3 @@
-"""여행 종료일이 지난 코스를 완료 상태로 전환하는 DAG."""
 from __future__ import annotations
 
 from datetime import timedelta

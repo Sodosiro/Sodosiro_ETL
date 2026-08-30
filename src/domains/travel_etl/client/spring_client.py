@@ -43,8 +43,26 @@ class SpringClient:
         return accepted
 
     def post_review_requests(self, run_id: str) -> dict:
-        url = f"{self._settings.spring_base_url}/internal/etl/notifications/review-requests"
-        payload = {"runId": run_id}
+        return self._post_json_with_retry(
+            f"{self._settings.spring_base_url}/internal/etl/notifications/review-requests",
+            {"runId": run_id},
+            "리뷰 알림 요청",
+        )
+
+    def post_withdrawn_user_purge(self, run_id: str) -> dict:
+        """유예기간이 지난 탈퇴 회원의 데이터를 완전 삭제하도록 Spring 에 요청한다.
+
+        실제 삭제 대상 조회·삭제·집계 보정·S3 정리는 모두 Spring 책임이며, 여기서는 트리거만 한다.
+        실패한 회원은 withdrawn_at 이 남아 있어 다음 실행이 다시 대상으로 잡는다.
+        """
+        return self._post_json_with_retry(
+            f"{self._settings.spring_base_url}/internal/etl/users/purge-withdrawn",
+            {"runId": run_id},
+            "탈퇴 회원 삭제 요청",
+        )
+
+    def _post_json_with_retry(self, url: str, payload: dict, label: str) -> dict:
+        """일시 오류(5xx·연결)만 지수 백오프로 재시도한다. 4xx 는 즉시 실패로 본다."""
         last_error: Exception | None = None
         for attempt in range(self._settings.max_retries + 1):
             try:
@@ -52,9 +70,9 @@ class SpringClient:
             except (requests.ConnectionError, requests.Timeout, _RetryableStatus) as e:
                 last_error = e
                 delay = 2**attempt
-                logger.warning("리뷰 알림 요청 재시도 %d회차 (%s) — %.0fs 대기", attempt + 1, e, delay)
+                logger.warning("%s 재시도 %d회차 (%s) — %.0fs 대기", label, attempt + 1, e, delay)
                 time.sleep(delay)
-        raise SpringNotifyError(f"리뷰 알림 요청 실패: {last_error}")
+        raise SpringNotifyError(f"{label} 실패: {last_error}")
 
     def _notify_once(self, run_id: str, batch: list[int]) -> int:
         url = f"{self._settings.spring_base_url}/internal/etl/travel/refresh"
@@ -97,7 +115,7 @@ class SpringClient:
             raise SpringNotifyError(f"HTTP {response.status_code}: {response.text[:200]}")
         body = response.json() if response.content else {}
         if not isinstance(body, dict):
-            raise SpringNotifyError("리뷰 알림 응답 형식이 객체가 아닙니다")
+            raise SpringNotifyError(f"응답 형식이 객체가 아닙니다: {url}")
         return body
 
 class _RetryableStatus(RuntimeError):
