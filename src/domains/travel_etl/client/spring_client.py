@@ -49,6 +49,14 @@ class SpringClient:
             "리뷰 알림 요청",
         )
 
+    def post_course_confirm_reminders(self, run_id: str) -> dict:
+        """여행 시작 D-1 인데 아직 확정하지 않은 코스의 소유자에게 확정 유도 알림을 보내도록 요청한다."""
+        return self._post_json_with_retry(
+            f"{self._settings.spring_base_url}/internal/etl/notifications/course-confirm-reminders",
+            {"runId": run_id},
+            "코스 확정 유도 알림 요청",
+        )
+
     def post_withdrawn_user_purge(self, run_id: str) -> dict:
         """유예기간이 지난 탈퇴 회원의 데이터를 완전 삭제하도록 Spring 에 요청한다.
 
