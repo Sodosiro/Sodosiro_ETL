@@ -25,6 +25,7 @@ from src.domains.travel_etl.controller.dto.models import (
     SpotImageRow,
     TouristSpotRow,
 )
+from src.domains.travel_etl.constants.small_town import is_small_town
 from src.domains.travel_etl.constants.tourist_category import classify_tourist_category
 from src.domains.travel_etl.service.restdate_normalizer import normalize_restdate
 
@@ -169,6 +170,8 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
                 lcls_systm3,
             )
             return None
+        ldong_regn_code = _text(item, "lDongRegnCd")
+        ldong_signgu_code = _text(item, "lDongSignguCd")
         return TouristSpotRow(
             content_id=content_id,
             content_type_id=_text(item, "contenttypeid"),
@@ -179,10 +182,11 @@ class TouristSpotNormalizer(Normalizer[TouristSpotRow]):
             map_x=_in_range(_decimal(item, "mapx"), _LON_RANGE),
             map_y=_in_range(_decimal(item, "mapy"), _LAT_RANGE),
             map_level=_int(item, "mlevel"),
-            ldong_regn_code=_text(item, "lDongRegnCd"),
-            ldong_signgu_code=_text(item, "lDongSignguCd"),
+            ldong_regn_code=ldong_regn_code,
+            ldong_signgu_code=ldong_signgu_code,
             sigungu_code=_text(item, "sigungucode"),
             category=int(category),
+            is_small_town=is_small_town(ldong_regn_code, ldong_signgu_code),
             first_image=_text(item, "firstimage"),
             created_time=_datetime14(item, "createdtime"),
             content_hash=compute_content_hash(item),

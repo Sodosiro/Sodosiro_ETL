@@ -128,7 +128,7 @@ class TravelRepository:
             """INSERT INTO tourist_spot (
                    content_id, content_type_id, title, addr1, addr2, zipcode, map_x, map_y, map_level,
                    ldong_regn_code, ldong_signgu_code,
-                   sigungu_code, category, first_image,
+                   sigungu_code, category, is_small_town, first_image,
                    created_time, collected_at
                ) VALUES %s
                ON CONFLICT (content_id) DO UPDATE SET
@@ -139,19 +139,20 @@ class TravelRepository:
                    ldong_regn_code = EXCLUDED.ldong_regn_code,
                    ldong_signgu_code = EXCLUDED.ldong_signgu_code,
                    sigungu_code = EXCLUDED.sigungu_code, category = EXCLUDED.category,
+                   is_small_town = EXCLUDED.is_small_town,
                    first_image = EXCLUDED.first_image, created_time = EXCLUDED.created_time,
                    collected_at = EXCLUDED.collected_at""",
             [
                 (
                     r.content_id, r.content_type_id, r.title, r.addr1, r.addr2, r.zipcode, r.map_x, r.map_y,
                     r.map_level, r.ldong_regn_code, r.ldong_signgu_code,
-                    r.sigungu_code, r.category,
+                    r.sigungu_code, r.category, r.is_small_town,
                     r.first_image, r.created_time,
                 )
                 for r in rows
             ],
             template=(
-                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())"
             ),
         )
 

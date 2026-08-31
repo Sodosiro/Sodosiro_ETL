@@ -57,6 +57,7 @@ class TouristSpotRow:
     ldong_signgu_code: str | None
     sigungu_code: str | None
     category: int
+    is_small_town: bool
     first_image: str | None
     created_time: datetime | None
     content_hash: str
