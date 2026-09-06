@@ -7,6 +7,12 @@ x-airflow-common: &airflow-common
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
 
+    # 소규모 호스트용 메모리 안전값. LocalExecutor가 동시에 많은 task subprocess를
+    # 만들지 않도록 제한하며, 필요하면 docker/.env에서 올릴 수 있다.
+    AIRFLOW__CORE__PARALLELISM: ${AIRFLOW_PARALLELISM:-4}
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: ${AIRFLOW_MAX_ACTIVE_TASKS_PER_DAG:-2}
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: ${AIRFLOW_MAX_ACTIVE_RUNS_PER_DAG:-1}
+
     # 외부에 분리한 PostgreSQL 주소로 변경
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_DB_URL}
 
@@ -17,6 +23,18 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
     # scheduler 컨테이너의 /health(8974) 엔드포인트를 활성화한다.
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: "true"
+    # DAG 파일 수가 적으므로 parser process 하나면 충분하다. 반복 import 간격도
+    # 늘려 scheduler의 상시 CPU/RSS 사용량을 낮춘다.
+    AIRFLOW__SCHEDULER__PARSING_PROCESSES: ${AIRFLOW_PARSING_PROCESSES:-1}
+    AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-60}
+    AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-300}
+
+    # 기본 webserver worker 수(4)는 이 규모에서 과하다.
+    AIRFLOW__WEBSERVER__WORKERS: ${AIRFLOW_WEBSERVER_WORKERS:-2}
+
+    # webserver와 scheduler가 각각 과도한 DB connection pool을 잡지 않게 한다.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_POOL_SIZE: ${AIRFLOW_SQL_ALCHEMY_POOL_SIZE:-5}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_MAX_OVERFLOW: ${AIRFLOW_SQL_ALCHEMY_MAX_OVERFLOW:-5}
 
     # travel_etl 패키지(src.domains.travel_etl) 임포트 경로
     PYTHONPATH: /opt/airflow/sodosiro
@@ -87,6 +105,8 @@ services:
 
     restart: on-failure
 
+    mem_limit: ${AIRFLOW_INIT_MEMORY_LIMIT:-768m}
+
   airflow-webserver:
     <<: *airflow-common
 
@@ -109,6 +129,8 @@ services:
       start_period: 30s
 
     restart: always
+
+    mem_limit: ${AIRFLOW_WEBSERVER_MEMORY_LIMIT:-640m}
 
     depends_on:
       airflow-init:
@@ -133,6 +155,10 @@ services:
       start_period: 30s
 
     restart: always
+
+    # LocalExecutor task subprocess도 scheduler 컨테이너에서 실행된다. ETL 실행
+    # 중 필요한 여유를 포함하되 호스트 전체 메모리를 잠식하지 않도록 상한을 둔다.
+    mem_limit: ${AIRFLOW_SCHEDULER_MEMORY_LIMIT:-1536m}
 
     depends_on:
       airflow-init:

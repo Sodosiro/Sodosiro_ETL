@@ -148,6 +148,22 @@ bash docker/deploy.sh
 - DB 연결은 `docker/.env`의 `AIRFLOW_DB_URL`로 설정합니다. Backend Compose의 공용 Docker 네트워크에서 `postgres:5432`를 사용합니다 (호스트 공개 포트 `5434`는 컨테이너 간 통신에 사용하지 않습니다).
 - `airflow-init`의 `airflow db migrate`는 **Airflow 메타데이터 DB**를 마이그레이션합니다. 여행지 **업무 DB**는 별도이며 아래에서 스키마를 적용합니다.
 
+#### Airflow 메모리 튜닝
+
+Docker 기본값은 소규모 호스트 기준으로 webserver `640m`, scheduler `1536m`의
+메모리 상한을 두고, LocalExecutor 동시 task를 4개(DAG당 2개), webserver worker와
+DAG parser를 각각 2개와 1개로 제한합니다. 값은 `docker/.env.example`의
+`AIRFLOW_*` 항목을 `docker/.env`에 복사해 조정할 수 있습니다.
+
+LocalExecutor의 task는 scheduler 컨테이너 안에서 실행됩니다. ETL이 OOM으로 종료되면
+`AIRFLOW_SCHEDULER_MEMORY_LIMIT`을 먼저 올리고, 평상시 메모리가 과하면
+`AIRFLOW_PARALLELISM`을 2까지 낮춘 뒤 컨테이너를 재생성하십시오.
+
+```bash
+docker stats --no-stream
+bash docker/deploy.sh
+```
+
 ### 업무 DB 스키마
 
 여행지 ETL이 적재하는 업무 DB(`tourist_spot`·`spot_image`·`etl_spot_state`·`etl_run` 등)는 자동 마이그레이션 도구 없이 `database/migrations/`의 SQL을 파일명 순서대로 한 번씩 적용합니다.
